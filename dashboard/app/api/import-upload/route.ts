@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
     );
 
     if (!resultado.success) {
-      return NextResponse.json({ error: resultado.error || 'Erro ao processar' }, { status: 500 });
+      console.error('Erro no processamento:', resultado.error);
+      return NextResponse.json({ error: resultado.error || 'Erro ao processar arquivos' }, { status: 500 });
     }
 
     return NextResponse.json({
