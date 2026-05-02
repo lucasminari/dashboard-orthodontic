@@ -144,53 +144,6 @@ export default function ImportPage() {
               </a>
             </div>
 
-            {/* Status cards */}
-            <div className="space-y-5">
-              {unidadesVisiveis.map(u => {
-                const piorDias = Math.max(...u.tipos.map(t => diasDesde(t.data_relatorio)));
-                return (
-                  <div
-                    key={u.unidade_id}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-6"
-                  >
-                    <div className="flex items-center gap-3 mb-5">
-                      <span
-                        className={`inline-block w-2.5 h-2.5 rounded-full ${pontoStatus(piorDias)}`}
-                      />
-                      <h2 className="text-xl font-semibold">{u.unidade_nome}</h2>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {u.tipos.map(t => {
-                        const dias = diasDesde(t.data_relatorio);
-                        return (
-                          <div
-                            key={t.tipo}
-                            className={`p-4 rounded-lg border ${classeStatus(dias)}`}
-                          >
-                            <div className="text-[10px] uppercase tracking-widest opacity-70 mb-2">
-                              {TIPOS_LABEL[t.tipo]}
-                            </div>
-                            <div className="text-base font-semibold leading-tight">
-                              {textoStatus(dias, t.data_relatorio)}
-                            </div>
-                            {t.data_relatorio ? (
-                              <div className="text-xs mt-2 opacity-80">
-                                {formatDataBR(t.data_relatorio)} · {t.qtd_linhas} linhas
-                              </div>
-                            ) : (
-                              <div className="text-xs mt-2 opacity-60">
-                                Aguardando primeiro export
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
           </div>
         )}
 
