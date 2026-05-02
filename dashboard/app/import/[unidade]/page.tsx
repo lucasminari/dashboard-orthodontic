@@ -59,18 +59,32 @@ function formatDataBR(d: string | null): string {
   return `${dia}/${mes}/${ano}`;
 }
 
+type ArquivoSelecionado = {
+  tipo: string;
+  arquivo?: File;
+};
+
 export default function ImportUnidadePage({ params }: { params: Promise<{ unidade: string }> }) {
   const [dados, setDados] = useState<UnidadeStatus[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [agora, setAgora] = useState(new Date());
+  const [arquivos, setArquivos] = useState<Record<string, File | null>>({
+    leads: null,
+    sistema: null,
+    performance: null,
+    campanhas: null,
+  });
+  const [enviando, setEnviando] = useState(false);
+  const [erroUpload, setErroUpload] = useState<string | null>(null);
+  const [sucessoUpload, setSucessoUpload] = useState(false);
 
   const { unidade } = use(params);
   const unidadeSlug = unidade.toLowerCase();
   const unidadeInfo = UNIDADE_MAP[unidadeSlug];
   const unidadeId = unidadeInfo?.id;
 
-  useEffect(() => {
+  const carregar = () => {
     fetch('/api/imports-status')
       .then(r => r.json())
       .then(d => {
@@ -85,10 +99,70 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
         setErro(e.message);
         setCarregando(false);
       });
+  };
 
+  useEffect(() => {
+    carregar();
     const t = setInterval(() => setAgora(new Date()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  const enviarArquivos = async () => {
+    if (!unidadeId) return;
+    const arquivosValidos = Object.values(arquivos).filter(Boolean);
+    if (arquivosValidos.length !== 4) {
+      setErroUpload('Todos os 4 arquivos são obrigatórios');
+      return;
+    }
+
+    setEnviando(true);
+    setErroUpload(null);
+    setSucessoUpload(false);
+
+    const formData = new FormData();
+    formData.append('unidade_id', unidadeId.toString());
+    for (const [tipo, file] of Object.entries(arquivos)) {
+      if (file) formData.append('arquivo', file);
+    }
+
+    try {
+      const res = await fetch('/api/import-upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErroUpload(data.error || 'Erro ao enviar arquivos');
+        setEnviando(false);
+        return;
+      }
+      setSucessoUpload(true);
+      setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
+      setTimeout(() => {
+        carregar();
+        setSucessoUpload(false);
+      }, 2500);
+    } catch (e) {
+      setErroUpload(e instanceof Error ? e.message : 'Erro ao enviar');
+      setEnviando(false);
+    }
+  };
+
+  const processarArquivos = (files: FileList) => {
+    const novoEstado = { ...arquivos };
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const match = file.name.match(/^(\d{4}-\d{2}-\d{2})_(\w+)\./);
+      if (match) {
+        const tipo = match[2];
+        if (tipo in novoEstado) {
+          novoEstado[tipo] = file;
+        }
+      }
+    }
+    setArquivos(novoEstado);
+    setErroUpload(null);
+  };
 
   if (!unidadeInfo) {
     return (
@@ -173,6 +247,83 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                 );
               })}
+            </div>
+
+            {/* Upload de arquivos */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
+              <div>
+                <h2 className="text-xl font-semibold mb-1">Upload de Arquivos</h2>
+                <p className="text-gray-400 text-sm">Arraste os 4 arquivos aqui ou clique para selecionar</p>
+              </div>
+
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.add('border-blue-500', 'bg-blue-500/5');
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('border-blue-500', 'bg-blue-500/5');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove('border-blue-500', 'bg-blue-500/5');
+                  processarArquivos(e.dataTransfer.files);
+                }}
+                className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer transition hover:border-gray-500 hover:bg-gray-800/50"
+              >
+                <label className="block cursor-pointer">
+                  <div className="text-3xl mb-2">📁</div>
+                  <div className="text-sm font-medium text-gray-300 mb-1">
+                    Arraste os arquivos aqui
+                  </div>
+                  <div className="text-xs text-gray-500 mb-3">
+                    ou clique para selecionar múltiplos arquivos
+                  </div>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => e.target.files && processarArquivos(e.target.files)}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-gray-300 mb-3">Arquivos selecionados:</div>
+                {['leads', 'sistema', 'performance', 'campanhas'].map(tipo => (
+                  <div key={tipo} className="flex items-center gap-2 text-sm">
+                    <div className={`w-4 h-4 rounded border ${arquivos[tipo] ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}>
+                      {arquivos[tipo] && <div className="text-white text-xs flex items-center justify-center h-full">✓</div>}
+                    </div>
+                    <span className="text-gray-400 capitalize">{tipo}</span>
+                    {arquivos[tipo] && (
+                      <span className="text-xs text-gray-500">
+                        — {arquivos[tipo].name}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {erroUpload && (
+                <div className="bg-red-950/40 border border-red-700/60 text-red-200 rounded-lg p-3 text-sm">
+                  {erroUpload}
+                </div>
+              )}
+
+              {sucessoUpload && (
+                <div className="bg-emerald-950/40 border border-emerald-700/60 text-emerald-200 rounded-lg p-3 text-sm">
+                  ✅ Importação concluída com sucesso! Atualizando...
+                </div>
+              )}
+
+              <button
+                onClick={enviarArquivos}
+                disabled={enviando || Object.values(arquivos).filter(Boolean).length !== 4}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg transition"
+              >
+                {enviando ? 'Enviando...' : 'Enviar Arquivos'}
+              </button>
             </div>
 
             {/* Instruções de export */}
@@ -260,8 +411,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
                 <p className="text-xs text-gray-400 mb-2"><strong>Após exportar os 4 arquivos:</strong></p>
                 <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-                  <li>Coloque os 4 arquivos na pasta <code className="bg-gray-900 px-2 py-0.5 rounded text-gray-300">imports/{unidadeInfo.nome.split(' ')[0]}/</code></li>
-                  <li>O Lucas roda <code className="bg-gray-900 px-2 py-0.5 rounded text-gray-300">node importar-dia.js</code> e os dados chegam ao dashboard</li>
+                  <li>Use a seção <strong>Upload de Arquivos</strong> acima para enviar os 4 arquivos</li>
+                  <li>Os dados serão processados automaticamente e o dashboard atualizará em poucos segundos</li>
                 </ol>
               </div>
             </div>
