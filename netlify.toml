@@ -2,7 +2,3 @@
 command = "cd dashboard && npm run build"
 publish = "dashboard/.next"
 base = "dashboard"
-
-[build.environment]
-NEXT_PUBLIC_SUPABASE_URL = "https://gzumcvstknrhompnxfee.supabase.co"
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_u5WBN7L2K8s4XsFDDg2M2w_DN3fR6a7"
