@@ -39,18 +39,17 @@ function diasDesde(data: string | null): number {
   return Math.floor((hoje.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function classeStatus(temRelatorio: boolean): string {
-  if (!temRelatorio) return 'bg-red-950/40 border-red-700/60 text-red-100';
+function classeStatus(): string {
   return 'bg-gray-800/40 border-gray-700/60 text-gray-100';
 }
 
 function pontoStatus(temRelatorio: boolean): string {
-  if (!temRelatorio) return 'bg-red-400';
+  if (!temRelatorio) return 'bg-gray-400';
   return 'bg-blue-400';
 }
 
 function textoStatus(data: string | null): string {
-  if (!data) return 'Nunca importado';
+  if (!data) return 'Aguardando primeiro import';
   return `Última atualização: ${formatDataBR(data)}`;
 }
 
@@ -154,7 +153,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                       {u.tipos.map(t => (
                           <div
                             key={t.tipo}
-                            className={`p-4 rounded-lg border ${classeStatus(t.data_relatorio !== null)}`}
+                            className={`p-4 rounded-lg border ${classeStatus()}`}
                           >
                             <div className="text-[10px] uppercase tracking-widest opacity-70 mb-2">
                               {TIPOS_LABEL[t.tipo]}
