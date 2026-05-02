@@ -31,7 +31,7 @@ const PERIODOS = [
   { id: 'tudo',  nome: 'Tudo' },
   { id: 'hoje',  nome: 'Hoje' },
   { id: '7d',    nome: 'Últimos 7 dias' },
-  { id: '30d',   nome: 'Últimos 30 dias' },
+  { id: '30d',   nome: 'Mês anterior' },
   { id: 'mes',   nome: 'Este mês' },
   { id: 'personalizado', nome: 'Personalizado' },
 ];
@@ -45,8 +45,9 @@ function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
     return { desde: fmt(d), ate: fmt(hoje) };
   }
   if (id === '30d') {
-    const d = new Date(hoje); d.setDate(d.getDate() - 30);
-    return { desde: fmt(d), ate: fmt(hoje) };
+    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const ultimoDiaAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    return { desde: fmt(mesAnterior), ate: fmt(ultimoDiaAnterior) };
   }
   if (id === 'mes') {
     const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
