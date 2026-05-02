@@ -39,11 +39,13 @@ function diasDesde(data: string | null): number {
   return Math.floor((hoje.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function classeStatus(): string {
+function classeStatus(temRelatorio: boolean): string {
+  if (!temRelatorio) return 'bg-red-950/40 border-red-700/60 text-red-100';
   return 'bg-gray-800/40 border-gray-700/60 text-gray-100';
 }
 
-function pontoStatus(): string {
+function pontoStatus(temRelatorio: boolean): string {
+  if (!temRelatorio) return 'bg-red-400';
   return 'bg-blue-400';
 }
 
@@ -135,14 +137,16 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
           <div className="space-y-8">
             {/* Status cards */}
             <div className="space-y-5">
-              {unidadesVisiveis.map(u => (
+              {unidadesVisiveis.map(u => {
+                const todasAtualizadas = u.tipos.every(t => t.data_relatorio !== null);
+                return (
                   <div
                     key={u.unidade_id}
                     className="bg-gray-900 border border-gray-800 rounded-xl p-6"
                   >
                     <div className="flex items-center gap-3 mb-5">
                       <span
-                        className={`inline-block w-2.5 h-2.5 rounded-full ${pontoStatus()}`}
+                        className={`inline-block w-2.5 h-2.5 rounded-full ${pontoStatus(todasAtualizadas)}`}
                       />
                       <h2 className="text-xl font-semibold">{u.unidade_nome}</h2>
                     </div>
@@ -150,7 +154,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                       {u.tipos.map(t => (
                           <div
                             key={t.tipo}
-                            className={`p-4 rounded-lg border ${classeStatus()}`}
+                            className={`p-4 rounded-lg border ${classeStatus(t.data_relatorio !== null)}`}
                           >
                             <div className="text-[10px] uppercase tracking-widest opacity-70 mb-2">
                               {TIPOS_LABEL[t.tipo]}
@@ -168,7 +172,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
                     </div>
                   </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Instruções de export */}
