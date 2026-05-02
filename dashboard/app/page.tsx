@@ -69,7 +69,7 @@ export default function Home() {
   const carregar = useCallback(async (uId: number, pId: string, desde?: string, ate?: string) => {
     setCarregando(true);
     setErro(null);
-    let intervalo = { desde, ate };
+    let intervalo: { desde?: string; ate?: string } = { desde, ate };
     if (!desde || !ate) {
       intervalo = intervaloPeriodo(pId);
     }
