@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@netlify/next-runtime": "^5.0.0-alpha.25",
     "@supabase/supabase-js": "^2.105.1",
     "next": "16.2.4",
     "papaparse": "^5.4.1",
