@@ -49,7 +49,7 @@ function pontoStatus(): string {
 
 function textoStatus(data: string | null): string {
   if (!data) return 'Nunca importado';
-  return `Atualizado em ${formatDataBR(data)}`;
+  return `Última atualização: ${formatDataBR(data)}`;
 }
 
 function formatDataBR(d: string | null): string {
