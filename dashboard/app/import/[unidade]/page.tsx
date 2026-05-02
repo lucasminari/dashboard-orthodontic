@@ -39,23 +39,17 @@ function diasDesde(data: string | null): number {
   return Math.floor((hoje.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function classeStatus(dias: number): string {
-  if (dias === 0) return 'bg-emerald-950/40 border-emerald-700/60 text-emerald-100';
-  if (dias === 1) return 'bg-amber-950/40 border-amber-700/60 text-amber-100';
-  return 'bg-red-950/40 border-red-700/60 text-red-100';
+function classeStatus(): string {
+  return 'bg-gray-800/40 border-gray-700/60 text-gray-100';
 }
 
-function pontoStatus(dias: number): string {
-  if (dias === 0) return 'bg-emerald-400';
-  if (dias === 1) return 'bg-amber-400';
-  return 'bg-red-400';
+function pontoStatus(): string {
+  return 'bg-blue-400';
 }
 
-function textoStatus(dias: number, data: string | null): string {
+function textoStatus(data: string | null): string {
   if (!data) return 'Nunca importado';
-  if (dias === 0) return 'Atualizado hoje';
-  if (dias === 1) return 'Atualizado ontem';
-  return `Atrasado ${dias} dias`;
+  return `Atualizado em ${formatDataBR(data)}`;
 }
 
 function formatDataBR(d: string | null): string {
@@ -141,49 +135,40 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
           <div className="space-y-8">
             {/* Status cards */}
             <div className="space-y-5">
-              {unidadesVisiveis.map(u => {
-                const piorDias = Math.max(...u.tipos.map(t => diasDesde(t.data_relatorio)));
-                return (
+              {unidadesVisiveis.map(u => (
                   <div
                     key={u.unidade_id}
                     className="bg-gray-900 border border-gray-800 rounded-xl p-6"
                   >
                     <div className="flex items-center gap-3 mb-5">
                       <span
-                        className={`inline-block w-2.5 h-2.5 rounded-full ${pontoStatus(piorDias)}`}
+                        className={`inline-block w-2.5 h-2.5 rounded-full ${pontoStatus()}`}
                       />
                       <h2 className="text-xl font-semibold">{u.unidade_nome}</h2>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {u.tipos.map(t => {
-                        const dias = diasDesde(t.data_relatorio);
-                        return (
+                      {u.tipos.map(t => (
                           <div
                             key={t.tipo}
-                            className={`p-4 rounded-lg border ${classeStatus(dias)}`}
+                            className={`p-4 rounded-lg border ${classeStatus()}`}
                           >
                             <div className="text-[10px] uppercase tracking-widest opacity-70 mb-2">
                               {TIPOS_LABEL[t.tipo]}
                             </div>
                             <div className="text-base font-semibold leading-tight">
-                              {textoStatus(dias, t.data_relatorio)}
+                              {textoStatus(t.data_relatorio)}
                             </div>
-                            {t.data_relatorio ? (
+                            {t.data_relatorio && (
                               <div className="text-xs mt-2 opacity-80">
-                                {formatDataBR(t.data_relatorio)} · {t.qtd_linhas} linhas
-                              </div>
-                            ) : (
-                              <div className="text-xs mt-2 opacity-60">
-                                Aguardando primeiro export
+                                {t.qtd_linhas} linhas
                               </div>
                             )}
                           </div>
-                        );
-                      })}
+                        ))}
+
                     </div>
                   </div>
-                );
-              })}
+              ))}
             </div>
 
             {/* Instruções de export */}
