@@ -1,4 +1,3 @@
 [build]
-command = "npm run build"
-base = "dashboard"
-publish = ".next"
+command = "cd dashboard && npm run build"
+publish = "dashboard/.next"
