@@ -122,6 +122,28 @@ export default function ImportPage() {
 
         {!carregando && !erro && (
           <div className="space-y-8">
+            {/* Atalhos para cada unidade */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <a
+                href="/import/centro"
+                className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 rounded-lg px-4 py-3 text-sm font-medium text-blue-300 transition text-center"
+              >
+                🏢 Centro
+              </a>
+              <a
+                href="/import/varzea"
+                className="bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-600/50 rounded-lg px-4 py-3 text-sm font-medium text-cyan-300 transition text-center"
+              >
+                🏢 Várzea Paulista
+              </a>
+              <a
+                href="/import/hortolandia"
+                className="bg-teal-600/20 hover:bg-teal-600/30 border border-teal-600/50 rounded-lg px-4 py-3 text-sm font-medium text-teal-300 transition text-center"
+              >
+                🏢 Hortolândia
+              </a>
+            </div>
+
             {/* Status cards */}
             <div className="space-y-5">
               {unidadesVisiveis.map(u => {
