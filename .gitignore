@@ -7,3 +7,5 @@ imports/
 .DS_Store
 dist/
 build/
+
+.vercel
