@@ -1,6 +1,0 @@
-[[plugins]]
-package = "@netlify/next-runtime"
-
-[build]
-command = "cd dashboard && npm run build"
-functions = "dashboard/.netlify/functions"
