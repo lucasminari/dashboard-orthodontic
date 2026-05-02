@@ -7,6 +7,7 @@ type Dados = {
   financeiro: { receita_realizada: number; pipeline_futuro: number };
 };
 type Origem = { origem: string; leads: number; fecharam: number; taxa_conversao: number };
+type ROIOrigem = { origem: string; leads: number; fecharam: number; receita: number; taxa_conversao: number };
 type Lembrete = {
   id: number; nome: string; telefone: string; valor: number;
   data_vcto: string; dias_para_vencer: number;
@@ -61,6 +62,7 @@ export default function Home() {
   const [atePersonalizado, setAtePersonalizado] = useState('');
   const [dados, setDados] = useState<Dados | null>(null);
   const [origens, setOrigens] = useState<Origem[] | null>(null);
+  const [roiOrigem, setRoiOrigem] = useState<ROIOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
   const [comparativo, setComparativo] = useState<ComparativoUnidade[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -80,11 +82,12 @@ export default function Home() {
     const q = params.toString() ? `?${params.toString()}` : '';
 
     try {
-      const [d, o, l, c] = await Promise.all([
-        fetch(`/api/kpis${q}`).then(r => r.json()),
-        fetch(`/api/origens${q}`).then(r => r.json()),
-        fetch(`/api/lembretes${uId ? `?unidade=${uId}` : ''}`).then(r => r.json()),
-        fetch(`/api/comparativo`).then(r => r.json()),
+      const [d, o, r, l, c] = await Promise.all([
+        fetch(`/api/kpis${q}`).then(res => res.json()),
+        fetch(`/api/origens${q}`).then(res => res.json()),
+        fetch(`/api/roi-origem${q}`).then(res => res.json()),
+        fetch(`/api/lembretes${uId ? `?unidade=${uId}` : ''}`).then(res => res.json()),
+        fetch(`/api/comparativo`).then(res => res.json()),
       ]);
       if (d.erro) throw new Error(d.erro);
       if (o.erro) throw new Error(o.erro);
@@ -92,6 +95,7 @@ export default function Home() {
       if (c.erro) throw new Error(c.erro);
       setDados(d);
       setOrigens(o.origens);
+      setRoiOrigem(r.origens);
       setLembretes(l.lembretes);
       setComparativo(c.unidades);
     } catch (e: any) {
@@ -180,7 +184,7 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
-      {!dados || !origens || !lembretes || !comparativo ? (
+      {!dados || !origens || !roiOrigem || !lembretes || !comparativo ? (
         <div className="text-gray-400">Carregando...</div>
       ) : (
         <>
@@ -198,6 +202,8 @@ export default function Home() {
             <Funil dados={dados} />
             <Origens origens={origens} />
           </div>
+
+          <ROIOrigem roiOrigem={roiOrigem} fmtBR={fmtBR} />
 
           <Lembretes
             lembretes={lembretes}
@@ -384,6 +390,41 @@ function Lembretes({
                   </span>
                 </td>
                 <td className="py-3 text-gray-400">{l.atendente ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function ROIOrigem({ roiOrigem, fmtBR }: { roiOrigem: ROIOrigem[]; fmtBR: (n: number) => string }) {
+  return (
+    <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+      <h2 className="text-lg font-semibold mb-1">Receita por origem</h2>
+      <p className="text-xs text-gray-500 mb-6">Leads do Kommo cruzados com OrthoDontic</p>
+      {roiOrigem.length === 0 ? (
+        <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="text-xs text-gray-500 uppercase">
+            <tr className="border-b border-gray-800">
+              <th className="text-left py-2 font-normal">Origem</th>
+              <th className="text-right py-2 font-normal">Leads</th>
+              <th className="text-right py-2 font-normal">Fecharam</th>
+              <th className="text-right py-2 font-normal">Taxa</th>
+              <th className="text-right py-2 font-normal">Receita</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roiOrigem.map(r => (
+              <tr key={r.origem} className="border-b border-gray-800 hover:bg-gray-800/30">
+                <td className="py-3 capitalize">{r.origem}</td>
+                <td className="py-3 text-right text-gray-300">{r.leads.toLocaleString('pt-BR')}</td>
+                <td className="py-3 text-right text-emerald-400 font-semibold">{r.fecharam.toLocaleString('pt-BR')}</td>
+                <td className="py-3 text-right text-gray-400">{r.taxa_conversao}%</td>
+                <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
               </tr>
             ))}
           </tbody>
