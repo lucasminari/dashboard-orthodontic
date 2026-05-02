@@ -1,3 +1,6 @@
 [build]
-base = "dashboard"
-command = "npm run build"
+  command = "npm run build"
+  base = "dashboard"
+
+[[plugins]]
+  package = "@netlify/next-runtime"
