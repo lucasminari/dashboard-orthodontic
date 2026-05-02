@@ -2,5 +2,5 @@
 package = "@netlify/next-runtime"
 
 [build]
-command = "npm run build"
-base = "dashboard"
+command = "cd dashboard && npm run build"
+functions = "dashboard/.netlify/functions"
