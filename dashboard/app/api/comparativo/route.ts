@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 const UNIDADES = [
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
