@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { use } from 'react';
+import { useUploadQueue } from '@/lib/hooks/useUploadQueue';
 
 const TIPOS_LABEL: Record<string, string> = {
   leads: 'Leads',
@@ -78,6 +79,9 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
   const [enviando, setEnviando] = useState(false);
   const [erroUpload, setErroUpload] = useState<string | null>(null);
   const [sucessoUpload, setSucessoUpload] = useState(false);
+  const [mostraFilaUploads, setMostraFilaUploads] = useState(false);
+
+  const { queue, isLoading: filaCarregando, retryUpload } = useUploadQueue();
 
   const { unidade } = use(params);
   const unidadeSlug = unidade.toLowerCase();
@@ -122,26 +126,38 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
     const formData = new FormData();
     formData.append('unidade_id', unidadeId.toString());
     for (const [tipo, file] of Object.entries(arquivos)) {
-      if (file) formData.append('arquivo', file);
+      if (file) formData.append(tipo, file);
     }
 
     try {
       const res = await fetch('/api/import-upload', {
         method: 'POST',
         body: formData,
+        cache: 'no-store',
       });
       const data = await res.json();
-      if (!res.ok) {
-        setErroUpload(data.error || 'Erro ao enviar arquivos');
+
+      console.log('[upload] resposta:', res.status, data);
+
+      if (res.status === 200 && data.success === true) {
+        // Sucesso real do servidor
+        setSucessoUpload(true);
+        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
+        setTimeout(() => {
+          carregar();
+          setSucessoUpload(false);
+          setEnviando(false);
+        }, 2500);
+      } else if (res.status === 202 && data.queued === true) {
+        // Enfileirado pelo Service Worker (offline)
+        setErroUpload('⏳ Sem conexão. Arquivos salvos localmente — vão ser enviados quando voltar online.');
+        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
         setEnviando(false);
-        return;
+      } else {
+        // Erro real do servidor
+        setErroUpload(data.error || `Erro ao enviar arquivos (HTTP ${res.status})`);
+        setEnviando(false);
       }
-      setSucessoUpload(true);
-      setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
-      setTimeout(() => {
-        carregar();
-        setSucessoUpload(false);
-      }, 2500);
     } catch (e) {
       setErroUpload(e instanceof Error ? e.message : 'Erro ao enviar');
       setEnviando(false);
@@ -325,6 +341,59 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
               </button>
+
+              {(queue.pending.length > 0 || queue.uploading.length > 0 || queue.failed.length > 0) && (
+                <div className="bg-amber-950/40 border border-amber-700/60 text-amber-200 rounded-lg p-3 text-sm">
+                  <button
+                    onClick={() => setMostraFilaUploads(!mostraFilaUploads)}
+                    className="flex items-center gap-2 w-full text-left hover:opacity-80"
+                  >
+                    <span>⏳ {queue.pending.length + queue.uploading.length + queue.failed.length} upload(s) na fila</span>
+                    <span className="text-xs ml-auto">{mostraFilaUploads ? '▼' : '▶'}</span>
+                  </button>
+
+                  {mostraFilaUploads && (
+                    <div className="mt-3 space-y-2 text-xs">
+                      {queue.uploading.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-blue-200 mb-1">Enviando:</div>
+                          {queue.uploading.map(u => (
+                            <div key={u.id} className="text-gray-300 ml-2">
+                              • {new Date(u.timestamp).toLocaleTimeString('pt-BR')}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {queue.pending.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-yellow-200 mb-1">Aguardando:</div>
+                          {queue.pending.map(u => (
+                            <div key={u.id} className="text-gray-300 ml-2">
+                              • {new Date(u.timestamp).toLocaleTimeString('pt-BR')}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {queue.failed.length > 0 && (
+                        <div>
+                          <div className="font-semibold text-red-200 mb-1">Com erro (retentando em breve):</div>
+                          {queue.failed.map(u => (
+                            <div key={u.id} className="text-gray-300 ml-2 flex items-center justify-between">
+                              <span>• {new Date(u.timestamp).toLocaleTimeString('pt-BR')} ({u.retries}x)</span>
+                              <button
+                                onClick={() => retryUpload(u.id)}
+                                className="text-xs bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-white transition"
+                              >
+                                Tentar agora
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Instruções de export */}

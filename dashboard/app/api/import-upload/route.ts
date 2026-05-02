@@ -106,12 +106,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: resultado.error || 'Erro ao processar arquivos' }, { status: 500 });
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data_relatorio: dataRelatorio,
       unidade_id: parseInt(unidadeId),
       processed: resultado.processed,
     });
+
+    response.headers.set('X-Upload-Id', crypto.randomUUID());
+    return response;
   } catch (error) {
     console.error('Erro em /api/import-upload:', error);
     return NextResponse.json(
