@@ -150,13 +150,14 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const processarArquivos = (files: FileList) => {
     const novoEstado = { ...arquivos };
+    const tipos = ['leads', 'sistema', 'performance', 'campanhas'];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const match = file.name.match(/^(\d{4}-\d{2}-\d{2})_(\w+)\./);
-      if (match) {
-        const tipo = match[2];
-        if (tipo in novoEstado) {
+      const nome = file.name.toLowerCase();
+      for (const tipo of tipos) {
+        if (nome.includes(tipo)) {
           novoEstado[tipo] = file;
+          break;
         }
       }
     }
