@@ -1,0 +1,6 @@
+{
+  "buildCommand": "cd dashboard && npm run build",
+  "installCommand": "npm install",
+  "env": {},
+  "regions": ["gru1"]
+}

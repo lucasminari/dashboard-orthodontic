@@ -1,7 +1,5 @@
 'use client';
 
-export const revalidate = 0;
-
 import { useEffect, useState, useCallback } from 'react';
 
 type Dados = {
