@@ -348,7 +348,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p><strong>Filtro:</strong> Data de Referência = Cadastro (Lead único), Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> clique em Exportar → salve como <code className="bg-gray-800 px-2 py-1 rounded">YYYY-MM-DD_leads.xlsx</code></p>
+                    <p><strong>Arquivo:</strong> clique em Exportar → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>
 
@@ -366,7 +366,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p><strong>Filtro:</strong> Status = Contratos por Data de Fechamento, Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → salve como <code className="bg-gray-800 px-2 py-1 rounded">YYYY-MM-DD_sistema.xlsx</code></p>
+                    <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>
 
@@ -384,7 +384,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p><strong>Filtro:</strong> Base da Data = Data do Agendamento, Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> clique em Exportar → salve como <code className="bg-gray-800 px-2 py-1 rounded">YYYY-MM-DD_performance.csv</code></p>
+                    <p><strong>Arquivo:</strong> clique em Exportar → baixe diretamente (sem renomear)</p>
                     <p className="text-amber-300">⚠️ Este arquivo é CSV (não Excel)</p>
                   </div>
                 </div>
@@ -403,7 +403,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p><strong>Filtro:</strong> Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> clique em Exportar → salve como <code className="bg-gray-800 px-2 py-1 rounded">YYYY-MM-DD_campanhas.xlsx</code></p>
+                    <p><strong>Arquivo:</strong> clique em Exportar → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>
               </div>

@@ -12,14 +12,20 @@ const EXTENSOES_VALIDAS: Record<string, string[]> = {
 };
 
 function extrairTipo(filename: string): string | null {
-  // Espera: YYYY-MM-DD_<tipo>.<ext>
-  const match = filename.match(/^\d{4}-\d{2}-\d{2}_(\w+)\./);
-  return match ? match[1] : null;
+  const lower = filename.toLowerCase();
+  if (lower.includes('leads')) return 'leads';
+  if (lower.includes('sistema') || lower.includes('contrato')) return 'sistema';
+  if (lower.includes('performance')) return 'performance';
+  if (lower.includes('campanha') || lower.includes('campaign')) return 'campanhas';
+  return null;
 }
 
-function extrairData(filename: string): string | null {
-  const match = filename.match(/^(\d{4}-\d{2}-\d{2})_/);
-  return match ? match[1] : null;
+function obterDataHoje(): string {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
 }
 
 function extrairExtensao(filename: string): string {
@@ -37,7 +43,6 @@ export async function POST(request: NextRequest) {
     }
 
     const files: Record<string, File> = {};
-    const datas: Set<string> = new Set();
     const tipos: Set<string> = new Set();
 
     // Processar arquivos
@@ -45,12 +50,11 @@ export async function POST(request: NextRequest) {
       if (value instanceof File) {
         const filename = value.name;
         const tipo = extrairTipo(filename);
-        const data = extrairData(filename);
         const ext = extrairExtensao(filename);
 
-        if (!tipo || !data) {
+        if (!tipo) {
           return NextResponse.json(
-            { error: `Nome de arquivo inválido: ${filename}. Esperado: YYYY-MM-DD_<tipo>.<ext>` },
+            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'leads', 'sistema', 'performance' ou 'campanhas' no nome.` },
             { status: 400 },
           );
         }
@@ -70,7 +74,6 @@ export async function POST(request: NextRequest) {
         }
 
         files[tipo] = value;
-        datas.add(data);
         tipos.add(tipo);
       }
     }
@@ -84,15 +87,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar que todas as datas são iguais
-    if (datas.size > 1) {
-      return NextResponse.json(
-        { error: `Datas inconsistentes: ${Array.from(datas).join(', ')}. Todos os arquivos devem ter a mesma data.` },
-        { status: 400 },
-      );
-    }
-
-    const dataRelatorio = Array.from(datas)[0];
+    const dataRelatorio = obterDataHoje();
 
     // Processar arquivos
     const resultado = await processarArquivos(
