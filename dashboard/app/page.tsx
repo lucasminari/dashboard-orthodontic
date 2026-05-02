@@ -184,6 +184,36 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
+      <div className="mb-8 bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <h2 className="text-lg font-semibold mb-4">Atalhos</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <a
+            href="/import"
+            className="bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-600/50 rounded-lg px-4 py-3 text-sm font-medium text-indigo-300 transition"
+          >
+            📋 Relatórios (Geral)
+          </a>
+          <a
+            href="/import/centro"
+            className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 rounded-lg px-4 py-3 text-sm font-medium text-blue-300 transition"
+          >
+            🏢 Centro
+          </a>
+          <a
+            href="/import/varzea"
+            className="bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-600/50 rounded-lg px-4 py-3 text-sm font-medium text-cyan-300 transition"
+          >
+            🏢 Várzea Paulista
+          </a>
+          <a
+            href="/import/hortolandia"
+            className="bg-teal-600/20 hover:bg-teal-600/30 border border-teal-600/50 rounded-lg px-4 py-3 text-sm font-medium text-teal-300 transition"
+          >
+            🏢 Hortolândia
+          </a>
+        </div>
+      </div>
+
       {!dados || !origens || !roiOrigem || !lembretes || !comparativo ? (
         <div className="text-gray-400">Carregando...</div>
       ) : (
