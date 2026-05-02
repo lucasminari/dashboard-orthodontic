@@ -2,7 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+// No servidor, prefere SERVICE_ROLE_KEY (bypassa RLS para inserts).
+// Cai para chave publica/anon se a service role nao estiver configurada.
 const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -10,7 +14,9 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Variáveis de ambiente Supabase não configuradas');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 interface ProcessarArquivosResult {
   success: boolean;
