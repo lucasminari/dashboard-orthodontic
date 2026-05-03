@@ -432,7 +432,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <button
                 onClick={enviarArquivos}
-                disabled={enviando || Object.values(arquivos).filter(Boolean).length !== 4}
+                disabled={enviando || !arquivos.sistema || !arquivos.performance || !arquivos.campanhas}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg transition"
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
