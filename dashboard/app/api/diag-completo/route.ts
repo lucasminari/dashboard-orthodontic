@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 import { mapearOrigem } from '@/lib/origem-mapeamento';
 
 export const dynamic = 'force-dynamic';
@@ -16,9 +17,9 @@ export async function GET() {
 
   try {
     // ── raw_sistema ────────────────────────────────────────────
-    const { data: sistemaRows } = await supabase
-      .from('raw_sistema')
-      .select('paciente_id_externo, telefone_norm, paciente_nome, origem, data_avaliacao, data_contrato, data_pgto, vlr_contrato, dentista, func_contrato, situacao, unidade_id');
+    const sistemaRows: any[] = await buscarTudo('raw_sistema', q =>
+      q.select('paciente_id_externo, telefone_norm, paciente_nome, origem, data_avaliacao, data_contrato, data_pgto, vlr_contrato, dentista, func_contrato, situacao, unidade_id'),
+    );
 
     const totalSis = sistemaRows?.length || 0;
     const semOrigem = (sistemaRows || []).filter(r => !r.origem).length;
@@ -78,9 +79,9 @@ export async function GET() {
     };
 
     // ── raw_performance ────────────────────────────────────────
-    const { data: perfRows } = await supabase
-      .from('raw_performance')
-      .select('telefone_norm, paciente_nome, data, status, telemarketing, origem, unidade_id');
+    const perfRows: any[] = await buscarTudo('raw_performance', q =>
+      q.select('telefone_norm, paciente_nome, data, status, telemarketing, origem, unidade_id'),
+    );
 
     const totalPerf = perfRows?.length || 0;
     const datasP = (perfRows || []).map(r => r.data).filter(Boolean).sort();

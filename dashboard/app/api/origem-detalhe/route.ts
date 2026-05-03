@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 import { mapearOrigem } from '@/lib/origem-mapeamento';
 
 export const dynamic = 'force-dynamic';
@@ -60,24 +60,22 @@ export async function GET(request: NextRequest) {
     const dataFim = searchParams.get('data_fim');
 
     // ── raw_sistema ───────────────────────────────────────────────────────
-    let qSis = supabase
-      .from('raw_sistema')
-      .select(
+    const sistemaRows = await buscarTudo('raw_sistema', q => {
+      let qq = q.select(
         'origem, campanha, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, vlr_contrato, dentista, func_contrato, promotor, indicacao, unidade_id',
       );
-    if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
-    const { data: sistemaRows, error: errSis } = await qSis;
-    if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      return qq;
+    });
 
     // ── raw_performance ───────────────────────────────────────────────────
-    let qPerf = supabase
-      .from('raw_performance')
-      .select(
+    const perfRows = await buscarTudo('raw_performance', q => {
+      let qq = q.select(
         'origem, compareceu, faltou, status, telefone_norm, paciente_nome, telemarketing, data, unidade_id',
       );
-    if (unidadeId) qPerf = qPerf.eq('unidade_id', unidadeId);
-    const { data: perfRows, error: errPerf } = await qPerf;
-    if (errPerf) throw new Error(`raw_performance: ${errPerf.message}`);
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      return qq;
+    });
 
     // ── Filtros utilitarios ───────────────────────────────────────────────
     const noPeriodo = (data: string | null | undefined): boolean => {

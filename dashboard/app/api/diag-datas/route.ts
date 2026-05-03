@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,10 +8,9 @@ export const dynamic = 'force-dynamic';
 // em cada mes, pra ver se o parser esta lendo as datas certas.
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from('raw_sistema')
-      .select('data_avaliacao, data_contrato, data_pgto');
-    if (error) throw new Error(error.message);
+    const data: any[] = await buscarTudo('raw_sistema', q =>
+      q.select('data_avaliacao, data_contrato, data_pgto'),
+    );
 
     const contar = (campo: 'data_avaliacao' | 'data_contrato' | 'data_pgto') => {
       const mapa: Record<string, number> = {};

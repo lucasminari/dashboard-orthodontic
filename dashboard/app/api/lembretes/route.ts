@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 
 export async function GET(request: Request) {
   try {
@@ -9,17 +9,15 @@ export async function GET(request: Request) {
 
     const hoje = new Date().toISOString().slice(0, 10);
 
-    let query = supabase
-      .from('raw_sistema')
-      .select('id, paciente_nome, telefone_orig, data_contrato, data_vcto, vlr_contrato, dentista, func_contrato, unidade_id')
-      .is('data_pgto', null)
-      .gte('data_vcto', hoje)
-      .order('data_vcto', { ascending: true });
-
-    if (unidade) query = query.eq('unidade_id', unidade);
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    const data = await buscarTudo('raw_sistema', q => {
+      let qq = q
+        .select('id, paciente_nome, telefone_orig, data_contrato, data_vcto, vlr_contrato, dentista, func_contrato, unidade_id')
+        .is('data_pgto', null)
+        .gte('data_vcto', hoje)
+        .order('data_vcto', { ascending: true });
+      if (unidade) qq = qq.eq('unidade_id', unidade);
+      return qq;
+    });
 
     const lembretes = (data || []).map(r => {
       const vcto = new Date(r.data_vcto + 'T00:00:00');

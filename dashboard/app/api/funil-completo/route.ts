@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 import {
   mapearOrigem,
   isOrigemKommo,
@@ -75,14 +75,13 @@ export async function GET(request: NextRequest) {
     const dataFim = searchParams.get('data_fim');
 
     // ── raw_sistema (Orthodontic) ─────────────────────────────────────────
-    let qSis = supabase
-      .from('raw_sistema')
-      .select(
+    const sistemaRows = await buscarTudo('raw_sistema', q => {
+      let qq = q.select(
         'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, vlr_contrato, unidade_id',
       );
-    if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
-    const { data: sistemaRows, error: errSis } = await qSis;
-    if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      return qq;
+    });
 
     // Helpers de filtro de periodo
     const noPeriodo = (data: string | null | undefined): boolean => {
@@ -95,16 +94,15 @@ export async function GET(request: NextRequest) {
     const semFiltro = !dataInicio && !dataFim;
 
     // ── raw_performance (Telemarketing) ───────────────────────────────────
-    let qPerf = supabase
-      .from('raw_performance')
-      .select(
+    const perfRows = await buscarTudo('raw_performance', q => {
+      let qq = q.select(
         'origem, compareceu, status, telefone_norm, paciente_nome, data, unidade_id',
       );
-    if (unidadeId) qPerf = qPerf.eq('unidade_id', unidadeId);
-    if (dataInicio) qPerf = qPerf.gte('data', dataInicio);
-    if (dataFim) qPerf = qPerf.lte('data', dataFim);
-    const { data: perfRows, error: errPerf } = await qPerf;
-    if (errPerf) throw new Error(`raw_performance: ${errPerf.message}`);
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      if (dataInicio) qq = qq.gte('data', dataInicio);
+      if (dataFim) qq = qq.lte('data', dataFim);
+      return qq;
+    });
 
     // ── Acumulador por origem normalizada ─────────────────────────────────
     const acc: Map<string, AcumuladorOrigem> = new Map();

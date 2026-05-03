@@ -1,26 +1,16 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 
 export const dynamic = 'force-dynamic';
 
-// Endpoint diagnostico para listar todas as origens distintas
-// que aparecem em raw_leads (Kommo) e raw_sistema (Orthodontic),
-// junto com a contagem de quantas vezes aparecem.
 export async function GET() {
   try {
-    // Origens em raw_leads (Kommo)
-    const { data: leadsRows, error: errLeads } = await supabase
-      .from('raw_leads')
-      .select('origem, unidade_id');
-
-    if (errLeads) throw new Error(`raw_leads: ${errLeads.message}`);
-
-    // Origens em raw_sistema (Orthodontic)
-    const { data: sistemaRows, error: errSis } = await supabase
-      .from('raw_sistema')
-      .select('origem, unidade_id');
-
-    if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
+    const leadsRows: any[] = await buscarTudo('raw_leads', q =>
+      q.select('origem, unidade_id'),
+    );
+    const sistemaRows: any[] = await buscarTudo('raw_sistema', q =>
+      q.select('origem, unidade_id'),
+    );
 
     // Agrupar leads por origem
     const leadsMap = new Map<string, number>();

@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { buscarTudo } from '@/lib/supabase-paginar';
 import { mapearOrigem } from '@/lib/origem-mapeamento';
 
 export const dynamic = 'force-dynamic';
@@ -24,13 +24,13 @@ export async function GET(request: NextRequest) {
     }
     const dataMin = `${meses[0]}-01`;
 
-    let qSis = supabase
-      .from('raw_sistema')
-      .select('origem, data_avaliacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id')
-      .gte('data_avaliacao', dataMin);
-    if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
-    const { data: sistemaRows, error: errSis } = await qSis;
-    if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
+    const sistemaRows = await buscarTudo('raw_sistema', q => {
+      let qq = q
+        .select('origem, data_avaliacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id')
+        .gte('data_avaliacao', dataMin);
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      return qq;
+    });
 
     // Mapa: origem -> mes -> Set de pacientes
     const dados = new Map<string, Map<string, Set<string>>>();
