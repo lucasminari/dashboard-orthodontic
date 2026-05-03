@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { AtualizadoEm } from './components/AtualizadoEm';
+import { Alertas } from './components/Alertas';
 
 type Dados = {
   funil: { leads: number; agendados: number; compareceram: number; fecharam: number; pagaram: number };
@@ -199,6 +200,8 @@ export default function Home() {
         <div className="text-gray-400">Carregando...</div>
       ) : (
         <>
+          <Alertas unidadeId={unidadeId || undefined} />
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
             <Card label="Leads"        valor={dados.funil.leads.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['leads']} />
             <Card label="Agendados"    valor={dados.funil.agendados.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />

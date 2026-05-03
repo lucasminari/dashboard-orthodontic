@@ -174,6 +174,14 @@ export default function ComparativoPage() {
                 ))}
               </div>
             </Section>
+
+            {/* Mesma campanha em diferentes unidades */}
+            <Section
+              titulo="Comparativo por campanha"
+              descricao="Mesma campanha lado a lado entre unidades — vê onde cada origem rende mais."
+            >
+              <CampanhaPorUnidade unidades={unidades} />
+            </Section>
           </div>
         )}
       </div>
@@ -321,6 +329,103 @@ function FunilCard({ u }: { u: DadosUnidade }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
+  // Junta todas as campanhas de todas as unidades em um Set, depois mostra
+  // pra cada campanha os numeros de cada unidade.
+  const todasOrigens = new Set<string>();
+  unidades.forEach(u => u.funil.funis.forEach(f => {
+    if (f.cadastrados > 0) todasOrigens.add(f.origem);
+  }));
+
+  // Ordena: 5 Kommo primeiro (na ordem fixa), depois por volume total desc
+  const KOMMO_ORDER = ['Mídia Real', 'DBOUT', 'PitchYes', 'Sorriso Novo', 'Galú'];
+  const lista = Array.from(todasOrigens).sort((a, b) => {
+    const ai = KOMMO_ORDER.indexOf(a);
+    const bi = KOMMO_ORDER.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.cadastrados || 0), 0);
+    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.cadastrados || 0), 0);
+    return totalB - totalA;
+  });
+
+  if (lista.length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-sm text-gray-500">
+        Nenhuma campanha com leads no período.
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-800/40 text-gray-400 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3 font-normal">Campanha</th>
+              <th className="text-center px-3 py-3 font-normal">Etapa</th>
+              {unidades.map(u => (
+                <th
+                  key={u.unidade_id}
+                  className="text-right px-4 py-3 font-medium"
+                  style={{ color: u.cor }}
+                >
+                  {u.nome}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((origem, idx) => {
+              const linhas: Array<{ etapa: string; key: 'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' }> = [
+                { etapa: 'Cadastrados', key: 'cadastrados' },
+                { etapa: 'Pagaram', key: 'pagaram' },
+              ];
+              return linhas.map((l, li) => {
+                const valores = unidades.map(u => {
+                  const f = u.funil.funis.find(x => x.origem === origem);
+                  return f ? f[l.key] : 0;
+                });
+                const max = Math.max(...valores, 1);
+                return (
+                  <tr
+                    key={`${origem}-${l.key}`}
+                    className={`border-t border-gray-800/60 ${li === 0 && idx > 0 ? 'border-t-2 border-t-gray-800' : ''}`}
+                  >
+                    {li === 0 ? (
+                      <td className="px-4 py-2 font-medium text-gray-200" rowSpan={linhas.length}>
+                        {origem}
+                      </td>
+                    ) : null}
+                    <td className="px-3 py-2 text-center text-xs text-gray-500">{l.etapa}</td>
+                    {unidades.map((u, i) => {
+                      const v = valores[i];
+                      const isMax = v === max && v > 0;
+                      return (
+                        <td
+                          key={u.unidade_id}
+                          className={`px-4 py-2 text-right tabular-nums ${
+                            v === 0 ? 'text-gray-700' : isMax ? 'font-semibold' : 'text-gray-300'
+                          }`}
+                          style={isMax ? { color: u.cor } : undefined}
+                        >
+                          {v === 0 ? '—' : v.toLocaleString('pt-BR')}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              });
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

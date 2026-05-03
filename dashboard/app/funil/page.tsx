@@ -33,6 +33,11 @@ type RespostaFunil = {
   contagem: { leads: number; sistema: number; performance: number };
 };
 
+type RespostaTendencia = {
+  meses: string[];
+  origens: Record<string, { serie: number[]; variacao: number | null }>;
+};
+
 const UNIDADES = [
   { id: 0, nome: 'Todas as unidades' },
   { id: 1, nome: 'Centro' },
@@ -81,6 +86,7 @@ export default function FunilPage() {
   const [unidadeId, setUnidadeId] = useState(0);
   const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
+  const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [outrosAberto, setOutrosAberto] = useState(false);
@@ -94,13 +100,21 @@ export default function FunilPage() {
     if (intervalo.desde) params.set('data_inicio', intervalo.desde);
     if (intervalo.ate) params.set('data_fim', intervalo.ate);
 
+    const tendenciaParams = new URLSearchParams();
+    if (uId) tendenciaParams.set('unidade_id', String(uId));
+
     try {
-      const res = await fetch(`/api/funil-completo?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) {
-        setErro(json.error || 'Erro ao carregar dados');
+      const [funilRes, tendRes] = await Promise.all([
+        fetch(`/api/funil-completo?${params.toString()}`).then(r => r.json()),
+        fetch(`/api/tendencia-origens?${tendenciaParams.toString()}`).then(r => r.json()),
+      ]);
+      if (funilRes.error) {
+        setErro(funilRes.error);
       } else {
-        setDados(json);
+        setDados(funilRes);
+      }
+      if (!tendRes.error) {
+        setTendencia(tendRes);
       }
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar');
@@ -202,7 +216,11 @@ export default function FunilPage() {
                 {/* Grid de mini-funis */}
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
                   {principais.map(f => (
-                    <MiniFunil key={f.origem} f={f} />
+                    <MiniFunil
+                      key={f.origem}
+                      f={f}
+                      tendenciaOrigem={tendencia?.origens[f.origem]}
+                    />
                   ))}
                 </div>
 
@@ -232,7 +250,12 @@ export default function FunilPage() {
                     {outrosAberto && (
                       <div className="p-4 border-t border-gray-800 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {outros.map(f => (
-                          <MiniFunil key={f.origem} f={f} compact />
+                          <MiniFunil
+                            key={f.origem}
+                            f={f}
+                            compact
+                            tendenciaOrigem={tendencia?.origens[f.origem]}
+                          />
                         ))}
                       </div>
                     )}
@@ -263,7 +286,15 @@ function CardTotal({ titulo, valor, cor }: { titulo: string; valor: number; cor:
   );
 }
 
-function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }) {
+function MiniFunil({
+  f,
+  compact = false,
+  tendenciaOrigem,
+}: {
+  f: FunilOrigem;
+  compact?: boolean;
+  tendenciaOrigem?: { serie: number[]; variacao: number | null };
+}) {
   const etapas = [
     { nome: 'Cadastrados', valor: f.cadastrados, cor: '#6366f1', taxa: null as number | null },
     { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: f.taxa_cadastro_para_agendamento },
@@ -278,7 +309,7 @@ function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }
       href={`/origem/${encodeURIComponent(f.origem)}`}
       className={`block bg-gray-900 border border-gray-800 hover:border-indigo-700/60 hover:bg-gray-900/90 transition rounded-lg ${compact ? 'p-3' : 'p-5'} cursor-pointer`}
     >
-      <div className={`flex items-baseline justify-between mb-${compact ? '2' : '4'}`}>
+      <div className={`flex items-baseline justify-between mb-${compact ? '2' : '3'}`}>
         <h3 className={`font-semibold ${compact ? 'text-sm' : 'text-base'} text-gray-100 truncate pr-2`}>
           {f.origem}
         </h3>
@@ -288,6 +319,23 @@ function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }
           </span>
         )}
       </div>
+
+      {/* Sparkline + tendencia */}
+      {tendenciaOrigem && tendenciaOrigem.serie.length > 0 && (
+        <div className={`flex items-center gap-2 ${compact ? 'mb-2' : 'mb-3'}`}>
+          <Sparkline serie={tendenciaOrigem.serie} compact={compact} />
+          {tendenciaOrigem.variacao !== null && (
+            <span
+              className={`text-[10px] whitespace-nowrap ${
+                tendenciaOrigem.variacao >= 0 ? 'text-emerald-400' : 'text-red-400'
+              }`}
+            >
+              {tendenciaOrigem.variacao >= 0 ? '↑' : '↓'} {(tendenciaOrigem.variacao * 100).toFixed(0)}%
+            </span>
+          )}
+          <span className="text-[9px] text-gray-600">vs mês ant.</span>
+        </div>
+      )}
       <div className={`space-y-${compact ? '1' : '2'}`}>
         {etapas.map(e => {
           const pct = (e.valor / max) * 100;
@@ -315,5 +363,28 @@ function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }
         ver detalhes →
       </div>
     </Link>
+  );
+}
+
+function Sparkline({ serie, compact = false }: { serie: number[]; compact?: boolean }) {
+  if (serie.length === 0) return null;
+  const max = Math.max(...serie, 1);
+  const w = compact ? 70 : 90;
+  const h = compact ? 18 : 22;
+  const pontos = serie
+    .map((v, i) => {
+      const x = (i / Math.max(serie.length - 1, 1)) * w;
+      const y = h - (v / max) * (h - 2) - 1;
+      return `${x},${y}`;
+    })
+    .join(' ');
+  // Cor baseada em tendencia (subindo verde, descendo vermelho, estavel azul)
+  const ult = serie[serie.length - 1];
+  const pen = serie[serie.length - 2] || 0;
+  const cor = ult > pen ? '#10b981' : ult < pen ? '#ef4444' : '#6366f1';
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline fill="none" stroke={cor} strokeWidth="1.5" points={pontos} />
+    </svg>
   );
 }
