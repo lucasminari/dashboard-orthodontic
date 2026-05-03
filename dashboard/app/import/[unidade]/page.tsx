@@ -593,7 +593,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                     </a>
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
-                    <p><strong>Filtro:</strong> Status = Contratos por Data de Pagamento, Período = mês corrente até hoje</p>
+                    <p><strong>Filtro:</strong> Status = Contratos por Data de Pagamento, Plano = Ortodontia, Período = mês corrente até hoje</p>
                     <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>
