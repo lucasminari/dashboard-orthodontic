@@ -31,6 +31,31 @@ type UnidadeStatus = {
   tipos: TipoStatus[];
 };
 
+type ImportLog = {
+  id: number;
+  unidade_id: number;
+  unidade: string;
+  tipo: string;
+  data_relatorio: string;
+  qtd_linhas: number;
+  concluido_em: string | null;
+  criado_em: string | null;
+  arquivo: string | null;
+};
+
+const TIPO_COR: Record<string, string> = {
+  leads: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
+  sistema: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
+  performance: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  campanhas: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+};
+
+function formatDataHora(d: string | null): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return `${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 function diasDesde(data: string | null): number {
   if (!data) return Infinity;
   const d = new Date(data);
@@ -82,6 +107,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
   const [mostraFilaUploads, setMostraFilaUploads] = useState(false);
   const [limpando, setLimpando] = useState(false);
   const [resultadoLimpeza, setResultadoLimpeza] = useState<string | null>(null);
+  const [historico, setHistorico] = useState<ImportLog[] | null>(null);
+  const [removendoId, setRemovendoId] = useState<number | null>(null);
 
   const { queue, isLoading: filaCarregando, retryUpload } = useUploadQueue();
 
@@ -105,6 +132,39 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
         setErro(e.message);
         setCarregando(false);
       });
+    if (unidadeId) {
+      fetch(`/api/imports-historico?limit=100&unidade_id=${unidadeId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (!d.error) setHistorico(d.itens || []);
+        })
+        .catch(() => {});
+    }
+  };
+
+  const removerImportacao = async (h: ImportLog) => {
+    const ok = window.confirm(
+      `Apagar esta importação?\n\n${h.tipo} · ${h.data_relatorio}\n${h.qtd_linhas} linhas (${h.arquivo || 'sem nome'})\n\nIsso vai remover só esses dados específicos. Não dá pra desfazer.`,
+    );
+    if (!ok) return;
+    setRemovendoId(h.id);
+    try {
+      const res = await fetch('/api/limpar-ingestao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingestao_id: h.id, confirmar: true }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        alert(`Erro: ${json.error}`);
+      } else {
+        carregar();
+      }
+    } catch (e) {
+      alert(`Erro: ${e instanceof Error ? e.message : 'erro'}`);
+    } finally {
+      setRemovendoId(null);
+    }
   };
 
   useEffect(() => {
@@ -445,6 +505,67 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                       )}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Histórico de uploads desta unidade */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-800">
+                <h2 className="text-lg font-semibold">Importações desta unidade</h2>
+                <p className="text-xs text-gray-500">Clique em "Remover" pra apagar uma importação específica e os dados que ela trouxe.</p>
+              </div>
+              {!historico || historico.length === 0 ? (
+                <div className="p-6 text-sm text-gray-500 text-center">
+                  Nenhuma importação registrada pra esta unidade.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-800/30">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-normal">Quando</th>
+                        <th className="text-left px-4 py-2 font-normal">Tipo</th>
+                        <th className="text-left px-4 py-2 font-normal">Data referência</th>
+                        <th className="text-right px-4 py-2 font-normal">Linhas</th>
+                        <th className="text-left px-4 py-2 font-normal">Arquivo</th>
+                        <th className="text-right px-4 py-2 font-normal">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historico.map(h => (
+                        <tr key={h.id} className="border-t border-gray-800/60 hover:bg-gray-800/20">
+                          <td className="px-4 py-2 text-gray-300 whitespace-nowrap">
+                            {formatDataHora(h.concluido_em || h.criado_em)}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider border ${TIPO_COR[h.tipo] || 'bg-gray-800 text-gray-400 border-gray-700'}`}
+                            >
+                              {h.tipo}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-gray-400">{formatDataBR(h.data_relatorio)}</td>
+                          <td className="px-4 py-2 text-right text-gray-300 tabular-nums">
+                            {h.qtd_linhas.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-xs" title={h.arquivo || ''}>
+                            {h.arquivo || ''}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              onClick={() => removerImportacao(h)}
+                              disabled={removendoId === h.id}
+                              className="text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 px-2 py-1 rounded border border-red-900/40 disabled:opacity-50 transition"
+                              title="Apagar esta importação e os dados associados"
+                            >
+                              {removendoId === h.id ? '...' : 'Remover'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
