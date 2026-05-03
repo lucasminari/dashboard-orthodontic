@@ -52,6 +52,7 @@ export default function FunisIndividuaisPage() {
   const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [outrosAberto, setOutrosAberto] = useState(false);
   const unidadeAtual = UNIDADES.find(u => u.id === unidadeId)?.nome ?? '';
   const periodoAtual = PERIODOS.find(p => p.id === periodoId)?.nome ?? '';
 
@@ -125,6 +126,12 @@ export default function FunisIndividuaisPage() {
     return b.cadastrados - a.cadastrados;
   });
 
+  // TOP 5 com mais contratos pagos vai destacado.
+  // O resto entra em 'Outros' clicavel/expansivel.
+  const TOP = 5;
+  const principais = todasCampanhas.slice(0, TOP);
+  const outros = todasCampanhas.slice(TOP);
+
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
@@ -159,15 +166,53 @@ export default function FunisIndividuaisPage() {
                 Nenhuma campanha com leads no período selecionado.
               </div>
             ) : (
-              <div className="space-y-4">
-                {todasCampanhas.map(f => (
-                  <CampanhaCard
-                    key={f.origem}
-                    f={f}
-                    tendenciaOrigem={tendencia?.origens[f.origem]}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="space-y-4">
+                  {principais.map(f => (
+                    <CampanhaCard
+                      key={f.origem}
+                      f={f}
+                      tendenciaOrigem={tendencia?.origens[f.origem]}
+                    />
+                  ))}
+                </div>
+
+                {outros.length > 0 && (
+                  <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setOutrosAberto(v => !v)}
+                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-800/40 transition"
+                    >
+                      <div className="flex items-center gap-2 text-left">
+                        <span className="text-gray-400 text-sm">{outrosAberto ? '▼' : '▶'}</span>
+                        <div>
+                          <div className="font-medium text-gray-200">
+                            Outros ({outros.length} {outros.length === 1 ? 'campanha' : 'campanhas'})
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Campanhas com menos contratos pagos — clique para detalhar
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400 hidden sm:block">
+                        Total: {outros.reduce((s, o) => s + o.pagaram, 0)} pagos ·{' '}
+                        {outros.reduce((s, o) => s + o.fecharam, 0)} fech.
+                      </div>
+                    </button>
+                    {outrosAberto && (
+                      <div className="p-4 border-t border-gray-800 space-y-4">
+                        {outros.map(f => (
+                          <CampanhaCard
+                            key={f.origem}
+                            f={f}
+                            tendenciaOrigem={tendencia?.origens[f.origem]}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

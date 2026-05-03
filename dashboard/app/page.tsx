@@ -329,24 +329,23 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
   );
 }
 
-// Constantes de classificacao de origens.
-// 'kommo' (5 origens campanhas pagas) sao SEMPRE principais.
-// Do sistema, as TOP_SISTEMA_PRINCIPAIS por leads ficam destacadas; resto vai pra "Outros".
-const TOP_SISTEMA_PRINCIPAIS = 5;
+// Top 5 campanhas com mais contratos PAGOS ficam destacadas; resto vai pra "Outros".
+const TOP_CAMPANHAS = 5;
 
 function classificarOrigens(origens: FunilOrigem[]) {
-  const ativas = origens.filter(o => o.cadastrados > 0);
-  const kommo = ativas.filter(o => o.fonte === 'kommo');
-  const sistemaOrdenado = ativas
-    .filter(o => o.fonte === 'sistema')
-    .sort((a, b) => b.cadastrados - a.cadastrados);
-  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
-  const sistemaOutros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
-
-  // Principais ficam ordenados por cadastrados desc juntos
-  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.cadastrados - a.cadastrados);
-
-  return { principais, outros: sistemaOutros };
+  // Considera origem com qualquer atividade no funil
+  const ativas = origens.filter(
+    o => o.cadastrados > 0 || o.agendados > 0 || o.compareceram > 0 || o.fecharam > 0 || o.pagaram > 0,
+  );
+  const ordenadas = [...ativas].sort((a, b) => {
+    if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
+    if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
+    if (b.receita !== a.receita) return b.receita - a.receita;
+    return b.cadastrados - a.cadastrados;
+  });
+  const principais = ordenadas.slice(0, TOP_CAMPANHAS);
+  const outros = ordenadas.slice(TOP_CAMPANHAS);
+  return { principais, outros };
 }
 
 function agregarOutros(outros: FunilOrigem[]): FunilOrigem | null {
@@ -384,12 +383,13 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
   const linhas: FunilOrigem[] = [...principais];
   if (outrosAgregado) linhas.push(outrosAgregado);
 
-  const max = Math.max(...linhas.map(o => o.cadastrados), 1);
+  // Barra proporcional ao numero de PAGOS (criterio principal de classificacao)
+  const max = Math.max(...linhas.map(o => o.pagaram), 1);
 
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex items-start justify-between mb-1">
-        <h2 className="text-lg font-semibold">Leads por origem</h2>
+        <h2 className="text-lg font-semibold">Top 5 campanhas (por contratos pagos)</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
       <p className="text-xs text-gray-500 mb-6">Clique numa campanha para abrir o detalhamento.</p>
@@ -399,7 +399,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
         <div className="space-y-3">
           {linhas.map(o => {
             const isOutros = o.origem === 'Outros';
-            const pct = (o.cadastrados / max) * 100;
+            const pct = (o.pagaram / max) * 100;
             const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
 
             const conteudo = (
@@ -419,17 +419,19 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                     )}
                   </span>
                   <span className="text-gray-400">
+                    <span className="text-emerald-400 font-semibold">
+                      {o.pagaram.toLocaleString('pt-BR')} pagos
+                    </span>
+                    <span className="text-gray-600 mx-1">·</span>
                     {o.cadastrados.toLocaleString('pt-BR')} leads
-                    {o.fecharam > 0 && (
-                      <span className="ml-2 text-emerald-400">
-                        · {o.fecharam} fech ({taxa.toFixed(1)}%)
-                      </span>
+                    {taxa > 0 && (
+                      <span className="ml-1 text-gray-500">({taxa.toFixed(0)}%)</span>
                     )}
                   </span>
                 </div>
                 <div className="bg-gray-800 rounded h-2 overflow-hidden">
                   <div
-                    className={`h-full ${isOutros ? 'bg-gray-500' : 'bg-indigo-500'}`}
+                    className={`h-full ${isOutros ? 'bg-gray-500' : 'bg-emerald-500'}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -451,7 +453,10 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                 {/* Detalhamento expandido de Outros (sub-linhas tambem clicaveis) */}
                 {isOutros && outrosAberto && (
                   <div className="mt-3 ml-4 pl-3 border-l border-gray-800 space-y-2">
-                    {outros.map(sub => {
+                    {outros
+                      .slice()
+                      .sort((a, b) => b.pagaram - a.pagaram || b.fecharam - a.fecharam)
+                      .map(sub => {
                       const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
                       return (
                         <Link
@@ -464,11 +469,11 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                             <span className="text-[10px] text-indigo-500/70 opacity-0 group-hover:opacity-100 ml-1">→</span>
                           </span>
                           <span className="text-gray-500">
-                            {sub.cadastrados.toLocaleString('pt-BR')} leads
-                            {sub.fecharam > 0 && (
-                              <span className="ml-2 text-emerald-500">
-                                · {sub.fecharam} ({subTaxa.toFixed(0)}%)
-                              </span>
+                            <span className="text-emerald-500">{sub.pagaram} pagos</span>
+                            <span className="text-gray-700 mx-1">·</span>
+                            {sub.cadastrados} leads
+                            {subTaxa > 0 && (
+                              <span className="ml-1 text-gray-600">({subTaxa.toFixed(0)}%)</span>
                             )}
                           </span>
                         </Link>

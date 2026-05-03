@@ -133,7 +133,7 @@ export default function ComparativoPage() {
             </Section>
 
             {/* Top campanhas por unidade */}
-            <Section titulo="Top campanhas por unidade" descricao="As 6 maiores campanhas de cada unidade.">
+            <Section titulo="Top 5 campanhas por unidade" descricao="As 5 com mais contratos pagos em cada unidade.">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {unidades.map(u => (
                   <TopCampanhas key={u.unidade_id} u={u} />
@@ -588,11 +588,17 @@ function MiniFunilUnidade({
 }
 
 function TopCampanhas({ u }: { u: DadosUnidade }) {
-  const top = [...u.funil.funis]
-    .filter(f => f.cadastrados > 0)
-    .sort((a, b) => b.cadastrados - a.cadastrados)
-    .slice(0, 6);
-  const max = Math.max(...top.map(t => t.cadastrados), 1);
+  const ativas = u.funil.funis.filter(
+    f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0,
+  );
+  const top = [...ativas]
+    .sort((a, b) => {
+      if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
+      if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
+      return b.cadastrados - a.cadastrados;
+    })
+    .slice(0, 5);
+  const max = Math.max(...top.map(t => t.pagaram), 1);
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
@@ -600,23 +606,25 @@ function TopCampanhas({ u }: { u: DadosUnidade }) {
         <h3 className="font-semibold text-base" style={{ color: u.cor }}>
           {u.nome}
         </h3>
-        <span className="text-xs text-gray-500">{u.funil.funis.filter(f => f.cadastrados > 0).length} campanhas</span>
+        <span className="text-xs text-gray-500">{ativas.length} campanhas</span>
       </div>
       {top.length === 0 ? (
         <div className="text-sm text-gray-500 py-4">Sem campanhas no período.</div>
       ) : (
         <div className="space-y-2">
           {top.map(c => {
-            const pct = (c.cadastrados / max) * 100;
+            const pct = (c.pagaram / max) * 100;
             const taxa = c.cadastrados > 0 ? (c.fecharam / c.cadastrados) * 100 : 0;
             return (
               <div key={c.origem}>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="text-gray-300 truncate pr-2">{c.origem}</span>
                   <span className="text-gray-400 whitespace-nowrap">
+                    <span className="text-emerald-400 font-semibold">{c.pagaram} pagos</span>
+                    <span className="text-gray-600 mx-1">·</span>
                     {c.cadastrados}
-                    {c.fecharam > 0 && (
-                      <span className="ml-1 text-emerald-400">· {c.fecharam} ({taxa.toFixed(0)}%)</span>
+                    {taxa > 0 && (
+                      <span className="ml-1 text-gray-500">({taxa.toFixed(0)}%)</span>
                     )}
                   </span>
                 </div>
