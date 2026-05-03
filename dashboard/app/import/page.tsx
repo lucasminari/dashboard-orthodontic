@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ExportarCSV } from '../components/ExportarCSV';
 
 const TIPOS_LABEL: Record<string, string> = {
   leads: 'Leads',
@@ -28,6 +29,32 @@ type UnidadeStatus = {
   unidade_nome: string;
   tipos: TipoStatus[];
 };
+
+type ImportLog = {
+  id: number;
+  unidade_id: number;
+  unidade: string;
+  tipo: string;
+  data_relatorio: string;
+  qtd_linhas: number;
+  concluido_em: string | null;
+  criado_em: string | null;
+  arquivo: string | null;
+  status: 'concluido' | 'pendente';
+};
+
+const TIPO_COR: Record<string, string> = {
+  leads: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
+  sistema: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
+  performance: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  campanhas: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+};
+
+function formatDataHora(d: string | null): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return `${dt.toLocaleDateString('pt-BR')} ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 function diasDesde(data: string | null): number {
   if (!data) return Infinity;
@@ -65,25 +92,23 @@ function formatDataBR(d: string | null): string {
 
 export default function ImportPage() {
   const [dados, setDados] = useState<UnidadeStatus[] | null>(null);
+  const [historico, setHistorico] = useState<ImportLog[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [agora, setAgora] = useState(new Date());
 
   useEffect(() => {
-    fetch('/api/imports-status')
-      .then(r => r.json())
-      .then(d => {
-        if (d.erro) {
-          setErro(d.erro);
-        } else {
-          setDados(d.unidades || []);
-        }
-        setCarregando(false);
+    Promise.all([
+      fetch('/api/imports-status').then(r => r.json()),
+      fetch('/api/imports-historico?limit=20').then(r => r.json()),
+    ])
+      .then(([statusRes, histRes]) => {
+        if (statusRes.erro) setErro(statusRes.erro);
+        else setDados(statusRes.unidades || []);
+        if (!histRes.error) setHistorico(histRes.itens || []);
       })
-      .catch(e => {
-        setErro(e.message);
-        setCarregando(false);
-      });
+      .catch(e => setErro(e.message))
+      .finally(() => setCarregando(false));
 
     const t = setInterval(() => setAgora(new Date()), 60_000);
     return () => clearInterval(t);
@@ -144,6 +169,78 @@ export default function ImportPage() {
               </a>
             </div>
 
+            {/* Historico de importacoes */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-baseline justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-semibold">Histórico de importações</h2>
+                  <p className="text-xs text-gray-500">Últimos uploads bem-sucedidos, do mais recente ao mais antigo.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {historico && historico.length > 0 && (
+                    <ExportarCSV
+                      nomeArquivo="historico-importacoes"
+                      linhas={historico}
+                      colunas={[
+                        { titulo: 'Concluído em', valor: h => h.concluido_em || h.criado_em || '' },
+                        { titulo: 'Unidade', valor: h => h.unidade },
+                        { titulo: 'Tipo', valor: h => h.tipo },
+                        { titulo: 'Data referência', valor: h => h.data_relatorio },
+                        { titulo: 'Linhas processadas', valor: h => h.qtd_linhas },
+                        { titulo: 'Arquivo', valor: h => h.arquivo ?? '' },
+                      ]}
+                    />
+                  )}
+                  {historico && (
+                    <span className="text-xs text-gray-500">{historico.length} registro(s)</span>
+                  )}
+                </div>
+              </div>
+              {!historico || historico.length === 0 ? (
+                <div className="p-6 text-sm text-gray-500 text-center">
+                  Nenhuma importação registrada ainda.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-800/30">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-normal">Quando</th>
+                        <th className="text-left px-4 py-2 font-normal">Unidade</th>
+                        <th className="text-left px-4 py-2 font-normal">Tipo</th>
+                        <th className="text-left px-4 py-2 font-normal">Data referência</th>
+                        <th className="text-right px-4 py-2 font-normal">Linhas</th>
+                        <th className="text-left px-4 py-2 font-normal">Arquivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historico.map(h => (
+                        <tr key={h.id} className="border-t border-gray-800/60 hover:bg-gray-800/20">
+                          <td className="px-4 py-2 text-gray-300 whitespace-nowrap">
+                            {formatDataHora(h.concluido_em || h.criado_em)}
+                          </td>
+                          <td className="px-4 py-2 text-gray-400">{h.unidade}</td>
+                          <td className="px-4 py-2">
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider border ${TIPO_COR[h.tipo] || 'bg-gray-800 text-gray-400 border-gray-700'}`}
+                            >
+                              {h.tipo}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-gray-400">{formatDataBR(h.data_relatorio)}</td>
+                          <td className="px-4 py-2 text-right text-gray-300 tabular-nums">
+                            {h.qtd_linhas.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-xs" title={h.arquivo || ''}>
+                            {h.arquivo || ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

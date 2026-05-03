@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AtualizadoEm } from '../components/AtualizadoEm';
 import { useFiltros, PERIODOS } from '../components/useFiltros';
+import { ExportarCSV } from '../components/ExportarCSV';
 
 type FunilOrigem = {
   origem: string;
@@ -177,9 +178,24 @@ function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-800">
-        <h2 className="text-lg font-semibold">Resumo geral</h2>
-        <p className="text-gray-400 text-xs">Números absolutos por unidade no período selecionado.</p>
+      <div className="px-5 py-4 border-b border-gray-800 flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">Resumo geral</h2>
+          <p className="text-gray-400 text-xs">Números absolutos por unidade no período selecionado.</p>
+        </div>
+        <ExportarCSV
+          nomeArquivo="comparativo-unidades"
+          linhas={unidades}
+          colunas={[
+            { titulo: 'Unidade', valor: u => u.nome },
+            { titulo: 'Cadastrados', valor: u => u.funil.total.cadastrados },
+            { titulo: 'Agendados', valor: u => u.funil.total.agendados },
+            { titulo: 'Compareceram', valor: u => u.funil.total.compareceram },
+            { titulo: 'Fecharam', valor: u => u.funil.total.fecharam },
+            { titulo: 'Pagaram', valor: u => u.funil.total.pagaram },
+            { titulo: 'Receita (R$)', valor: u => u.funil.total.receita.toFixed(2).replace('.', ',') },
+          ]}
+        />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

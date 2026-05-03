@@ -7,6 +7,7 @@ import { Alertas } from './components/Alertas';
 import { useFiltros, UNIDADES, PERIODOS } from './components/useFiltros';
 import { Skeleton, SkeletonCard } from './components/Skeleton';
 import { Tooltip } from './components/Tooltip';
+import { ExportarCSV } from './components/ExportarCSV';
 
 type TotalFunil = {
   cadastrados: number;
@@ -89,7 +90,7 @@ export default function Home() {
   const periodoAtual = PERIODOS.find(p => p.id === periodoId)?.nome ?? '';
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
+    <main className="min-h-screen bg-gray-950 text-white p-4 md:p-8">
       <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold mb-1">Painel comercial</h1>
@@ -487,7 +488,7 @@ function Lembretes({
   const ordenados = [...lembretes].sort((a, b) => a.dias_para_vencer - b.dias_para_vencer);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold">Lembretes de pagamento futuro</h2>
           <p className="text-xs text-gray-500">Ordenado por urgência. Clique no telefone para abrir WhatsApp.</p>
@@ -495,9 +496,24 @@ function Lembretes({
             <AtualizadoEm tipos={['sistema']} unidadeId={unidadeId || undefined} />
           </div>
         </div>
-        <span className="text-sm text-gray-400">
-          {lembretes.length} {lembretes.length === 1 ? 'pendência' : 'pendências'}
-        </span>
+        <div className="flex items-center gap-3">
+          <ExportarCSV
+            nomeArquivo="lembretes-pagamento"
+            linhas={ordenados}
+            colunas={[
+              { titulo: 'Paciente', valor: l => l.nome },
+              { titulo: 'Telefone', valor: l => l.telefone },
+              { titulo: 'Valor (R$)', valor: l => l.valor.toFixed(2).replace('.', ',') },
+              { titulo: 'Data Vencimento', valor: l => l.data_vcto },
+              { titulo: 'Dias para vencer', valor: l => l.dias_para_vencer },
+              { titulo: 'Atendente', valor: l => l.atendente ?? '' },
+              { titulo: 'Dentista', valor: l => l.dentista ?? '' },
+            ]}
+          />
+          <span className="text-sm text-gray-400">
+            {lembretes.length} {lembretes.length === 1 ? 'pendência' : 'pendências'}
+          </span>
+        </div>
       </div>
       {ordenados.length === 0 ? (
         <div className="text-gray-500 text-sm py-8 text-center">Nenhum pagamento pendente.</div>

@@ -15,59 +15,35 @@ export default function Navbar() {
     return pathname.startsWith(path);
   };
 
-  // Em /import e /origem, esconde os filtros (telas tem logica propria)
+  // Em /import, /origem e /buscar, esconde os filtros (telas tem logica propria)
   const mostraFiltros =
-    pronto && !pathname.startsWith('/import') && !pathname.startsWith('/origem');
+    pronto && !pathname.startsWith('/import') && !pathname.startsWith('/origem') && !pathname.startsWith('/buscar');
   const semUnidade = pathname.startsWith('/comparativo');
+
+  const linkClass = (path: string, ehInicio = false) =>
+    `text-sm font-medium transition-colors ${
+      ehInicio
+        ? isActive('/') && pathname === '/'
+          ? 'text-indigo-400'
+          : 'text-gray-300 hover:text-white'
+        : isActive(path)
+          ? 'text-indigo-400'
+          : 'text-gray-300 hover:text-white'
+    }`;
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
-      <div className="px-6 md:px-8 py-3 flex items-center gap-6 flex-wrap">
-        <div className="flex gap-4 md:gap-6 flex-wrap">
-          <Link
-            href="/"
-            className={`text-sm font-medium transition-colors ${
-              isActive('/') && pathname === '/'
-                ? 'text-indigo-400'
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Painel
-          </Link>
-          <Link
-            href="/funis-individuais"
-            className={`text-sm font-medium transition-colors ${
-              isActive('/funis-individuais')
-                ? 'text-indigo-400'
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Campanhas
-          </Link>
-          <Link
-            href="/comparativo"
-            className={`text-sm font-medium transition-colors ${
-              isActive('/comparativo')
-                ? 'text-indigo-400'
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Comparativo
-          </Link>
-          <Link
-            href="/import"
-            className={`text-sm font-medium transition-colors ${
-              isActive('/import')
-                ? 'text-indigo-400'
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Relatórios
-          </Link>
+      <div className="px-4 md:px-8 py-3 flex items-center gap-4 md:gap-6 flex-wrap">
+        <div className="flex gap-3 md:gap-5 flex-wrap items-center">
+          <Link href="/" className={linkClass('/', true)}>Painel</Link>
+          <Link href="/funis-individuais" className={linkClass('/funis-individuais')}>Campanhas</Link>
+          <Link href="/comparativo" className={linkClass('/comparativo')}>Comparativo</Link>
+          <Link href="/import" className={linkClass('/import')}>Relatórios</Link>
+          <Link href="/buscar" className={linkClass('/buscar')}>🔍 Buscar</Link>
         </div>
         {mostraFiltros && (
-          <div className="ml-auto flex items-center gap-3">
-            <span className="hidden md:block">
+          <div className="md:ml-auto flex items-center gap-2 md:gap-3 flex-wrap">
+            <span className="hidden lg:block">
               <AtualizadoEm
                 tipos={['leads', 'sistema', 'performance']}
                 unidadeId={unidadeId || undefined}
