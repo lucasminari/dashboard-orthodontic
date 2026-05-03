@@ -12,7 +12,6 @@ export const dynamic = 'force-dynamic';
 interface EtapasFunil {
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
 }
@@ -20,19 +19,19 @@ interface EtapasFunil {
 interface FunilOrigem extends EtapasFunil {
   origem: string;
   fonte: 'kommo' | 'sistema';
-  // Mantemos 'cadastrados' por compatibilidade da resposta, sempre = agendados
-  // (pra clientes legados nao quebrarem). Pode ser removido depois.
+  // Campos legados (mantidos pra compat) — fecharam == pagaram, cadastrados == agendados
+  fecharam: number;
   cadastrados: number;
   taxa_cadastro_para_agendamento: number | null;
   taxa_agendamento_para_comparecimento: number | null;
   taxa_comparecimento_para_fechamento: number | null;
+  taxa_comparecimento_para_pagamento: number | null;
   taxa_fechamento_para_pagamento: number | null;
 }
 
 interface AcumuladorOrigem {
   agendados: Set<string>;
   compareceram: Set<string>;
-  fecharam: Set<string>;
   pagaram: Set<string>;
   receita: number;
 }
@@ -41,7 +40,6 @@ function novoAcumulador(): AcumuladorOrigem {
   return {
     agendados: new Set(),
     compareceram: new Set(),
-    fecharam: new Set(),
     pagaram: new Set(),
     receita: 0,
   };
@@ -113,16 +111,16 @@ export async function GET(request: NextRequest) {
     // Garante visibilidade das 5 origens Kommo mesmo sem dados
     for (const c of ORIGENS_KOMMO_CANONICAS) get(c);
 
-    // ── Agendados / Fecharam / Pagaram (raw_sistema, filtro por etapa) ────
+    // ── Agendados / Pagaram (raw_sistema, filtro por etapa) ──────────────
+    // Como o arquivo agora contem so contratos PAGOS (filtro 'Data de
+    // Pagamento' no Orthodontic), 'fecharam' == 'pagaram'. Usamos so
+    // pagaram daqui pra frente.
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
       const a = get(origem);
       const k = chavePacienteSistema(r);
       if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
         a.agendados.add(k);
-      }
-      if (r.data_contrato && (semFiltro || noPeriodo(r.data_contrato))) {
-        a.fecharam.add(k);
       }
       if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
         if (!a.pagaram.has(k)) {
@@ -170,21 +168,21 @@ export async function GET(request: NextRequest) {
     for (const [origem, a] of acc.entries()) {
       const agendados = a.agendados.size;
       const compareceram = a.compareceram.size;
-      const fecharam = a.fecharam.size;
       const pagaram = a.pagaram.size;
       funis.push({
         origem,
         fonte: isOrigemKommo(origem) ? 'kommo' : 'sistema',
-        cadastrados: agendados, // legado: igual a agendados
+        cadastrados: agendados, // legado
+        fecharam: pagaram, // legado: arquivo so contem pagos
         agendados,
         compareceram,
-        fecharam,
         pagaram,
         receita: a.receita,
-        taxa_cadastro_para_agendamento: null, // legado, nao usado mais
+        taxa_cadastro_para_agendamento: null,
         taxa_agendamento_para_comparecimento: ratio(compareceram, agendados),
-        taxa_comparecimento_para_fechamento: ratio(fecharam, compareceram),
-        taxa_fechamento_para_pagamento: ratio(pagaram, fecharam),
+        taxa_comparecimento_para_fechamento: ratio(pagaram, compareceram),
+        taxa_comparecimento_para_pagamento: ratio(pagaram, compareceram),
+        taxa_fechamento_para_pagamento: null,
       });
     }
 
@@ -204,13 +202,16 @@ export async function GET(request: NextRequest) {
       (acc, f) => ({
         agendados: acc.agendados + f.agendados,
         compareceram: acc.compareceram + f.compareceram,
-        fecharam: acc.fecharam + f.fecharam,
         pagaram: acc.pagaram + f.pagaram,
         receita: acc.receita + f.receita,
       }),
-      { agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
+      { agendados: 0, compareceram: 0, pagaram: 0, receita: 0 },
     );
-    const total = { ...totalEt, cadastrados: totalEt.agendados }; // legado
+    const total = {
+      ...totalEt,
+      cadastrados: totalEt.agendados, // legado
+      fecharam: totalEt.pagaram, // legado
+    };
 
     return NextResponse.json({
       filtro: { unidade_id: unidadeId, data_inicio: dataInicio, data_fim: dataFim },

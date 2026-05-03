@@ -11,12 +11,10 @@ type FunilOrigem = {
   fonte: 'kommo' | 'sistema';
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
   taxa_agendamento_para_comparecimento: number | null;
-  taxa_comparecimento_para_fechamento: number | null;
-  taxa_fechamento_para_pagamento: number | null;
+  taxa_comparecimento_para_pagamento: number | null;
 };
 
 type RespostaFunil = {
@@ -24,7 +22,6 @@ type RespostaFunil = {
   total: {
     agendados: number;
     compareceram: number;
-    fecharam: number;
     pagaram: number;
     receita: number;
   };
@@ -173,10 +170,9 @@ function Section({ titulo, descricao, children }: { titulo: string; descricao?: 
 }
 
 function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
-  const linhas: { label: string; key: 'agendados' | 'compareceram' | 'fecharam' | 'pagaram'; pct?: boolean }[] = [
+  const linhas: { label: string; key: 'agendados' | 'compareceram' | 'pagaram'; pct?: boolean }[] = [
     { label: 'Agendados', key: 'agendados' },
     { label: 'Compareceram', key: 'compareceram' },
-    { label: 'Fecharam', key: 'fecharam' },
     { label: 'Pagaram', key: 'pagaram' },
   ];
 
@@ -194,7 +190,6 @@ function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
             { titulo: 'Unidade', valor: u => u.nome },
             { titulo: 'Agendados', valor: u => u.funil.total.agendados },
             { titulo: 'Compareceram', valor: u => u.funil.total.compareceram },
-            { titulo: 'Fecharam', valor: u => u.funil.total.fecharam },
             { titulo: 'Pagaram', valor: u => u.funil.total.pagaram },
             { titulo: 'Receita (R$)', valor: u => u.funil.total.receita.toFixed(2).replace('.', ',') },
           ]}
@@ -266,14 +261,9 @@ function FunilCard({ u }: { u: DadosUnidade }) {
       taxa: t.agendados > 0 ? t.compareceram / t.agendados : null,
     },
     {
-      nome: 'Fecharam',
-      valor: t.fecharam,
-      taxa: t.compareceram > 0 ? t.fecharam / t.compareceram : null,
-    },
-    {
       nome: 'Pagaram',
       valor: t.pagaram,
-      taxa: t.fecharam > 0 ? t.pagaram / t.fecharam : null,
+      taxa: t.compareceram > 0 ? t.pagaram / t.compareceram : null,
     },
   ];
   const max = Math.max(...etapas.map(e => e.valor), 1);
@@ -363,7 +353,7 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
           </thead>
           <tbody>
             {lista.map((origem, idx) => {
-              const linhas: Array<{ etapa: string; key: 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' }> = [
+              const linhas: Array<{ etapa: string; key: 'agendados' | 'compareceram' | 'pagaram' }> = [
                 { etapa: 'Agendados', key: 'agendados' },
                 { etapa: 'Pagaram', key: 'pagaram' },
               ];
@@ -418,7 +408,7 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
   // Junta todas as origens com atividade em pelo menos uma unidade
   const todasOrigens = new Set<string>();
   unidades.forEach(u => u.funil.funis.forEach(f => {
-    if (f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0) {
+    if (f.agendados > 0 || f.compareceram > 0 || f.pagaram > 0) {
       todasOrigens.add(f.origem);
     }
   }));
@@ -466,7 +456,7 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
           return {
             unidade: u,
             funil: f,
-            total: f ? f.agendados + f.compareceram + f.fecharam + f.pagaram : 0,
+            total: f ? f.agendados + f.compareceram + f.pagaram : 0,
           };
         });
         const totalGeral = porUnidade.reduce((s, x) => s + x.total, 0);
@@ -520,18 +510,15 @@ function MiniFunilUnidade({
   const f = funil || {
     agendados: 0,
     compareceram: 0,
-    fecharam: 0,
     pagaram: 0,
     receita: 0,
     taxa_agendamento_para_comparecimento: null,
-    taxa_comparecimento_para_fechamento: null,
-    taxa_fechamento_para_pagamento: null,
+    taxa_comparecimento_para_pagamento: null,
   };
   const etapas = [
     { nome: 'Agend.', valor: f.agendados, taxa: null as number | null },
     { nome: 'Compar.', valor: f.compareceram, taxa: f.taxa_agendamento_para_comparecimento },
-    { nome: 'Fechou', valor: f.fecharam, taxa: f.taxa_comparecimento_para_fechamento },
-    { nome: 'Pagou', valor: f.pagaram, taxa: f.taxa_fechamento_para_pagamento },
+    { nome: 'Pagou', valor: f.pagaram, taxa: f.taxa_comparecimento_para_pagamento },
   ];
   const max = Math.max(...etapas.map(e => e.valor), 1);
 
@@ -576,12 +563,12 @@ function MiniFunilUnidade({
 
 function TopCampanhas({ u }: { u: DadosUnidade }) {
   const ativas = u.funil.funis.filter(
-    f => f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0,
+    f => f.agendados > 0 || f.compareceram > 0 || f.pagaram > 0,
   );
   const top = [...ativas]
     .sort((a, b) => {
       if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
-      if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
+      if (b.compareceram !== a.compareceram) return b.compareceram - a.compareceram;
       return b.agendados - a.agendados;
     })
     .slice(0, 5);
@@ -601,7 +588,7 @@ function TopCampanhas({ u }: { u: DadosUnidade }) {
         <div className="space-y-2">
           {top.map(c => {
             const pct = (c.pagaram / max) * 100;
-            const taxa = c.agendados > 0 ? (c.fecharam / c.agendados) * 100 : 0;
+            const taxa = c.agendados > 0 ? (c.pagaram / c.agendados) * 100 : 0;
             return (
               <div key={c.origem}>
                 <div className="flex justify-between text-xs mb-1">

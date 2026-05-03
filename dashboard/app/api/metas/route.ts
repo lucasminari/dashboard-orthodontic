@@ -6,7 +6,6 @@ export const dynamic = 'force-dynamic';
 const TIPOS_VALIDOS = [
   'agendados',
   'compareceram',
-  'fecharam',
   'pagaram',
 ] as const;
 type TipoMeta = (typeof TIPOS_VALIDOS)[number];

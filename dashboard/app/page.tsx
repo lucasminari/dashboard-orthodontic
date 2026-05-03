@@ -14,7 +14,6 @@ import { MatrizConversoes } from './components/MatrizConversoes';
 type TotalFunil = {
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
 };
@@ -23,15 +22,9 @@ type FunilOrigem = {
   fonte: 'kommo' | 'sistema';
   agendados: number;
   compareceram: number;
-  fecharam: number;
+  fecharam: number; // legado, == pagaram
   pagaram: number;
   receita: number;
-};
-type Lembrete = {
-  id: number; nome: string; telefone: string; valor: number;
-  data_vcto: string; dias_para_vencer: number;
-  dentista: string | null; atendente: string | null;
-  urgencia: 'alta' | 'media' | 'baixa';
 };
 
 function buildParams(uId: number, desde?: string, ate?: string): string {
@@ -42,14 +35,13 @@ function buildParams(uId: number, desde?: string, ate?: string): string {
   return p.toString() ? `?${p.toString()}` : '';
 }
 
-type MapaMetas = Partial<Record<'agendados' | 'compareceram' | 'fecharam' | 'pagaram', number>>;
+type MapaMetas = Partial<Record<'agendados' | 'compareceram' | 'pagaram', number>>;
 
 export default function Home() {
   const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('mes');
   const [total, setTotal] = useState<TotalFunil | null>(null);
   const [totalAnt, setTotalAnt] = useState<TotalFunil | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
-  const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
   const [metas, setMetas] = useState<MapaMetas>({});
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -69,18 +61,15 @@ export default function Home() {
       : `?unidade_id=${unidadeId}`;
 
     try {
-      const [funilAtual, funilAnt, lembRes, metasRes] = await Promise.all([
+      const [funilAtual, funilAnt, metasRes] = await Promise.all([
         fetch(`/api/funil-completo${qAtual}`).then(res => res.json()),
         qAnt ? fetch(`/api/funil-completo${qAnt}`).then(res => res.json()) : Promise.resolve(null),
-        fetch(`/api/lembretes${unidadeId ? `?unidade=${unidadeId}` : ''}`).then(res => res.json()),
         fetch(`/api/metas${qMetas}`).then(res => res.json()).catch(() => ({ metas: [] })),
       ]);
       if (funilAtual.error) throw new Error(funilAtual.error);
-      if (lembRes.erro) throw new Error(lembRes.erro);
       setTotal(funilAtual.total);
       setTotalAnt(funilAnt && !funilAnt.error ? funilAnt.total : null);
       setFunilOrigens(funilAtual.funis);
-      setLembretes(lembRes.lembretes);
       // Monta mapa de metas (so usa se for periodo de 1 mes especifico)
       const m: MapaMetas = {};
       if (mesPeriodo && periodoId === 'mes') {
@@ -125,13 +114,13 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
-      {!total || !funilOrigens || !lembretes ? (
+      {!total || !funilOrigens ? (
         <SkeletonPainel />
       ) : (
         <>
           <Alertas unidadeId={unidadeId || undefined} />
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <Card
               label="Agendados"
               valor={total.agendados}
@@ -151,20 +140,11 @@ export default function Home() {
               tipos={['performance', 'sistema']}
             />
             <Card
-              label="Fecharam"
-              valor={total.fecharam}
-              valorAnterior={totalAnt?.fecharam}
-              meta={metas.fecharam}
-              tooltip="Pacientes que assinaram contrato no período (data de contrato preenchida)."
-              unidadeId={unidadeId}
-              tipos={['sistema']}
-            />
-            <Card
               label="Pagaram"
               valor={total.pagaram}
               valorAnterior={totalAnt?.pagaram}
               meta={metas.pagaram}
-              tooltip="Pacientes com pagamento confirmado (data_pgto preenchida) no período."
+              tooltip="Pacientes com contrato fechado e pagamento confirmado no período (1ª parcela paga)."
               unidadeId={unidadeId}
               tipos={['sistema']}
             />
@@ -172,7 +152,7 @@ export default function Home() {
               label="Receita"
               valor={total.receita}
               valorAnterior={totalAnt?.receita}
-              tooltip="Soma de vlr_contrato dos pacientes com pagamento confirmado (data_pgto) no período."
+              tooltip="Soma de vlr_contrato dos pacientes com pagamento confirmado no período."
               moeda
               unidadeId={unidadeId}
               tipos={['sistema']}
@@ -183,12 +163,6 @@ export default function Home() {
             <FunilGrafico total={total} unidadeId={unidadeId} />
             <Origens origens={funilOrigens} unidadeId={unidadeId} />
           </div>
-
-          <Lembretes
-            lembretes={lembretes}
-            fmtBR={fmtBR}
-            unidadeId={unidadeId}
-          />
         </>
       )}
     </main>
@@ -280,7 +254,6 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
   const etapas = [
     { nome: 'Agendados',    valor: total.agendados,    cor: '#06b6d4' },
     { nome: 'Compareceram', valor: total.compareceram, cor: '#a855f7' },
-    { nome: 'Fecharam',     valor: total.fecharam,     cor: '#eab308' },
     { nome: 'Pagaram',      valor: total.pagaram,      cor: '#10b981' },
   ];
   const max = Math.max(...etapas.map(e => e.valor), 1);
@@ -317,7 +290,6 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
       <MatrizConversoes
         agendados={total.agendados}
         compareceram={total.compareceram}
-        fecharam={total.fecharam}
         pagaram={total.pagaram}
       />
     </div>
@@ -482,131 +454,4 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
   );
 }
 
-// Cor do badge de vencimento por proximidade do prazo (alerta granular).
-function corBadgeVencimento(dias: number): string {
-  if (dias <= 0) return 'bg-red-950/60 text-red-200 border-red-700/70';
-  if (dias <= 3) return 'bg-red-950/40 text-red-300 border-red-800/60';
-  if (dias <= 7) return 'bg-orange-950/40 text-orange-300 border-orange-800/60';
-  if (dias <= 14) return 'bg-amber-950/40 text-amber-300 border-amber-800/60';
-  return 'bg-gray-800/60 text-gray-400 border-gray-700/60';
-}
-
-function textoVencimento(dias: number): string {
-  if (dias < 0) return `Vencido há ${Math.abs(dias)}d`;
-  if (dias === 0) return 'Vence hoje';
-  if (dias === 1) return 'Vence amanhã';
-  return `Em ${dias} dias`;
-}
-
-// Mantem so digitos do telefone — usado para tel: e wa.me
-function digitos(tel: string): string {
-  return (tel || '').replace(/\D/g, '');
-}
-
-function linkWhatsapp(tel: string): string {
-  const d = digitos(tel);
-  if (!d) return '#';
-  // Adiciona 55 se nao comecar com codigo de pais (pelo tamanho)
-  const numero = d.length === 10 || d.length === 11 ? `55${d}` : d;
-  return `https://wa.me/${numero}`;
-}
-
-function Lembretes({
-  lembretes, fmtBR, unidadeId,
-}: {
-  lembretes: Lembrete[];
-  fmtBR: (n: number) => string;
-  unidadeId?: number;
-}) {
-  // Ordena por urgencia: vencidos primeiro, depois mais proximos
-  const ordenados = [...lembretes].sort((a, b) => a.dias_para_vencer - b.dias_para_vencer);
-  return (
-    <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold">Lembretes de pagamento futuro</h2>
-          <p className="text-xs text-gray-500">Ordenado por urgência. Clique no telefone para abrir WhatsApp.</p>
-          <div className="mt-1">
-            <AtualizadoEm tipos={['sistema']} unidadeId={unidadeId || undefined} />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <ExportarCSV
-            nomeArquivo="lembretes-pagamento"
-            linhas={ordenados}
-            colunas={[
-              { titulo: 'Paciente', valor: l => l.nome },
-              { titulo: 'Telefone', valor: l => l.telefone },
-              { titulo: 'Valor (R$)', valor: l => l.valor.toFixed(2).replace('.', ',') },
-              { titulo: 'Data Vencimento', valor: l => l.data_vcto },
-              { titulo: 'Dias para vencer', valor: l => l.dias_para_vencer },
-              { titulo: 'Atendente', valor: l => l.atendente ?? '' },
-              { titulo: 'Dentista', valor: l => l.dentista ?? '' },
-            ]}
-          />
-          <span className="text-sm text-gray-400">
-            {lembretes.length} {lembretes.length === 1 ? 'pendência' : 'pendências'}
-          </span>
-        </div>
-      </div>
-      {ordenados.length === 0 ? (
-        <div className="text-gray-500 text-sm py-8 text-center">Nenhum pagamento pendente.</div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead className="text-xs text-gray-500 uppercase">
-            <tr className="border-b border-gray-800">
-              <th className="text-left py-2 font-normal">Paciente</th>
-              <th className="text-left py-2 font-normal">Contato</th>
-              <th className="text-right py-2 font-normal">Valor</th>
-              <th className="text-left py-2 pl-4 font-normal">Vencimento</th>
-              <th className="text-left py-2 font-normal">Atendente</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordenados.map(l => {
-              const tel = l.telefone || '';
-              const temTel = digitos(tel).length >= 10;
-              return (
-                <tr key={l.id} className="border-b border-gray-800 hover:bg-gray-800/30">
-                  <td className="py-3">{l.nome}</td>
-                  <td className="py-3">
-                    {temTel ? (
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={`tel:${digitos(tel)}`}
-                          className="text-gray-300 hover:text-indigo-300 transition"
-                          title="Ligar"
-                        >
-                          {tel}
-                        </a>
-                        <a
-                          href={linkWhatsapp(tel)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-400 hover:text-emerald-300 transition text-xs px-1.5 py-0.5 rounded border border-emerald-800/60 bg-emerald-950/30"
-                          title="Abrir no WhatsApp"
-                        >
-                          WhatsApp
-                        </a>
-                      </div>
-                    ) : (
-                      <span className="text-gray-500">—</span>
-                    )}
-                  </td>
-                  <td className="py-3 text-right font-semibold">R$ {fmtBR(l.valor)}</td>
-                  <td className="py-3 pl-4">
-                    <span className={`px-2 py-1 rounded text-xs border ${corBadgeVencimento(l.dias_para_vencer)}`}>
-                      {textoVencimento(l.dias_para_vencer)}
-                    </span>
-                  </td>
-                  <td className="py-3 text-gray-400">{l.atendente ?? ''}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
 

@@ -12,12 +12,10 @@ type FunilOrigem = {
   fonte: 'kommo' | 'sistema';
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
   taxa_agendamento_para_comparecimento: number | null;
-  taxa_comparecimento_para_fechamento: number | null;
-  taxa_fechamento_para_pagamento: number | null;
+  taxa_comparecimento_para_pagamento: number | null;
 };
 
 type RespostaFunil = {
@@ -25,7 +23,6 @@ type RespostaFunil = {
   total: {
     agendados: number;
     compareceram: number;
-    fecharam: number;
     pagaram: number;
     receita: number;
   };
@@ -86,11 +83,11 @@ export default function FunisIndividuaisPage() {
 
   // Mostra TODAS as campanhas individualmente. As 5 Kommo aparecem sempre
   // (mesmo zeradas). Sistema mostra qualquer com atividade. ORDEM unica:
-  // mais contratos PAGOS no topo. Tiebreaker: fecharam, depois receita,
-  // depois cadastrados. Campanhas zeradas vao pro final.
+  // mais contratos PAGOS no topo. Tiebreaker: receita, depois agendados.
+  // Campanhas zeradas vao pro final.
   const funisRecebidos = dados?.funis || [];
   const temAtividade = (f: FunilOrigem) =>
-    f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0;
+    f.agendados > 0 || f.compareceram > 0 || f.pagaram > 0;
   const mapPorOrigem = new Map(funisRecebidos.map(f => [f.origem, f]));
 
   // 5 origens Kommo aparecem sempre, mesmo zeradas
@@ -102,12 +99,10 @@ export default function FunisIndividuaisPage() {
       fonte: 'kommo' as const,
       agendados: 0,
       compareceram: 0,
-      fecharam: 0,
       pagaram: 0,
       receita: 0,
       taxa_agendamento_para_comparecimento: null,
-      taxa_comparecimento_para_fechamento: null,
-      taxa_fechamento_para_pagamento: null,
+      taxa_comparecimento_para_pagamento: null,
     };
   });
   const sistemaFunis = funisRecebidos.filter(
@@ -116,7 +111,6 @@ export default function FunisIndividuaisPage() {
 
   const todasCampanhas = [...kommoFunis, ...sistemaFunis].sort((a, b) => {
     if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
-    if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
     if (b.receita !== a.receita) return b.receita - a.receita;
     return b.agendados - a.agendados;
   });
@@ -191,7 +185,7 @@ export default function FunisIndividuaisPage() {
                       </div>
                       <div className="text-xs text-gray-400 hidden sm:block">
                         Total: {outros.reduce((s, o) => s + o.pagaram, 0)} pagos ·{' '}
-                        {outros.reduce((s, o) => s + o.fecharam, 0)} fech.
+                        {outros.reduce((s, o) => s + o.compareceram, 0)} compar.
                       </div>
                     </button>
                     {outrosAberto && (
@@ -272,7 +266,6 @@ function CampanhaCard({
       <MatrizConversoes
         agendados={f.agendados}
         compareceram={f.compareceram}
-        fecharam={f.fecharam}
         pagaram={f.pagaram}
         compacto
       />
@@ -284,8 +277,7 @@ function FunilConversao({ f }: { f: FunilOrigem }) {
   const etapas = [
     { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: null as number | null },
     { nome: 'Compareceram', valor: f.compareceram, cor: '#a855f7', taxa: f.taxa_agendamento_para_comparecimento },
-    { nome: 'Fecharam', valor: f.fecharam, cor: '#eab308', taxa: f.taxa_comparecimento_para_fechamento },
-    { nome: 'Pagaram', valor: f.pagaram, cor: '#10b981', taxa: f.taxa_fechamento_para_pagamento },
+    { nome: 'Pagaram', valor: f.pagaram, cor: '#10b981', taxa: f.taxa_comparecimento_para_pagamento },
   ];
   const max = Math.max(...etapas.map(e => e.valor), 1);
   const minLg = 12;
@@ -336,15 +328,9 @@ function FunilPerda({ f }: { f: FunilOrigem }) {
     },
     {
       de: 'Compareceram',
-      para: 'Fecharam',
-      perdidos: f.compareceram - f.fecharam,
-      base: f.compareceram,
-    },
-    {
-      de: 'Fecharam',
       para: 'Pagaram',
-      perdidos: f.fecharam - f.pagaram,
-      base: f.fecharam,
+      perdidos: f.compareceram - f.pagaram,
+      base: f.compareceram,
     },
   ].map(t => ({
     ...t,

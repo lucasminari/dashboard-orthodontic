@@ -12,7 +12,6 @@ type MesEvolucao = {
   rotulo: string;
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
 };
@@ -23,21 +22,18 @@ type RespostaDetalhe = {
   kpis: {
     agendados: number;
     compareceram: number;
-    fecharam: number;
     pagaram: number;
     receita: number;
     ticket_medio: number;
   };
   taxas: {
     agend_comp: number | null;
-    comp_fech: number | null;
-    fech_pag: number | null;
+    comp_pag: number | null;
   };
   media_geral: {
     ticket_medio: number;
     agend_comp: number | null;
-    comp_fech: number | null;
-    fech_pag: number | null;
+    comp_pag: number | null;
   };
   evolucao: MesEvolucao[];
   top: {
@@ -182,10 +178,9 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
         {!carregando && !erro && dados && (
           <div className="space-y-6">
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               <KpiCard titulo="Agendados" valor={dados.kpis.agendados} cor="#06b6d4" />
               <KpiCard titulo="Compareceram" valor={dados.kpis.compareceram} cor="#a855f7" />
-              <KpiCard titulo="Fecharam" valor={dados.kpis.fecharam} cor="#eab308" />
               <KpiCard titulo="Pagaram" valor={dados.kpis.pagaram} cor="#10b981" />
               <KpiCard
                 titulo="Receita"
@@ -215,7 +210,6 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
               <MatrizConversoes
                 agendados={dados.kpis.agendados}
                 compareceram={dados.kpis.compareceram}
-                fecharam={dados.kpis.fecharam}
                 pagaram={dados.kpis.pagaram}
               />
             </div>
@@ -278,8 +272,7 @@ function FunilInvertido({
   const etapas = [
     { nome: 'Agendados', valor: kpis.agendados, cor: '#06b6d4', taxa: null as number | null, taxaMedia: null as number | null, anterior: null as number | null },
     { nome: 'Compareceram', valor: kpis.compareceram, cor: '#a855f7', taxa: taxas.agend_comp, taxaMedia: mediaGeral.agend_comp, anterior: kpis.agendados },
-    { nome: 'Fecharam', valor: kpis.fecharam, cor: '#eab308', taxa: taxas.comp_fech, taxaMedia: mediaGeral.comp_fech, anterior: kpis.compareceram },
-    { nome: 'Pagaram', valor: kpis.pagaram, cor: '#10b981', taxa: taxas.fech_pag, taxaMedia: mediaGeral.fech_pag, anterior: kpis.fecharam },
+    { nome: 'Pagaram', valor: kpis.pagaram, cor: '#10b981', taxa: taxas.comp_pag, taxaMedia: mediaGeral.comp_pag, anterior: kpis.compareceram },
   ];
 
   // Largura do funil: do topo (100%) ao fundo (proporcional)
@@ -341,18 +334,14 @@ function FunilInvertido({
 
 function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
   const max = Math.max(
-    ...evolucao.flatMap(m => [m.agendados, m.compareceram, m.fecharam, m.pagaram]),
+    ...evolucao.flatMap(m => [m.agendados, m.compareceram, m.pagaram]),
     1
   );
-  const w = 60;
   const h = 200;
-  const total = evolucao.length;
-  const stepX = (w * total) / total;
 
   const linhas: { nome: string; cor: string; valores: number[] }[] = [
     { nome: 'Agend.', cor: '#06b6d4', valores: evolucao.map(e => e.agendados) },
     { nome: 'Compar.', cor: '#a855f7', valores: evolucao.map(e => e.compareceram) },
-    { nome: 'Fech.', cor: '#eab308', valores: evolucao.map(e => e.fecharam) },
     { nome: 'Pag.', cor: '#10b981', valores: evolucao.map(e => e.pagaram) },
   ];
 
@@ -380,7 +369,7 @@ function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
           </span>
         )}
       </div>
-      <p className="text-xs text-gray-500 mb-4">Trajetória das 4 etapas, ignora filtro de data.</p>
+      <p className="text-xs text-gray-500 mb-4">Trajetória das 3 etapas, ignora filtro de data.</p>
 
       <div className="relative" style={{ height: `${h}px` }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">

@@ -593,7 +593,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                     </a>
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
-                    <p><strong>Filtro:</strong> Status = Contratos por Data de Fechamento, Período = mês corrente até hoje</p>
+                    <p><strong>Filtro:</strong> Status = Contratos por <span className="text-amber-300">Data de Pagamento</span>, Período = mês corrente até hoje</p>
+                    <p className="text-amber-300/80">⚠️ Use o filtro Data de Pagamento (não Data de Fechamento) — assim só entram os contratos efetivamente pagos.</p>
                     <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>

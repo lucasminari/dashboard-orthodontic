@@ -9,7 +9,6 @@ interface Etapa {
 interface Props {
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   /** Tamanho compacto pra cards menores */
   compacto?: boolean;
@@ -31,14 +30,12 @@ function corPorTaxa(taxa: number): string {
 export function MatrizConversoes({
   agendados,
   compareceram,
-  fecharam,
   pagaram,
   compacto = false,
 }: Props) {
   const etapas: Etapa[] = [
     { label: 'Agendados', curto: 'Agend.', valor: agendados },
     { label: 'Compareceram', curto: 'Compar.', valor: compareceram },
-    { label: 'Fecharam', curto: 'Fech.', valor: fecharam },
     { label: 'Pagaram', curto: 'Pag.', valor: pagaram },
   ];
 

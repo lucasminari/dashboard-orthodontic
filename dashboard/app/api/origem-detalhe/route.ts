@@ -15,7 +15,6 @@ interface MesEvolucao {
   rotulo: string;
   agendados: number;
   compareceram: number;
-  fecharam: number;
   pagaram: number;
   receita: number;
 }
@@ -92,7 +91,6 @@ export async function GET(request: NextRequest) {
     // ── KPIs (totais) ─────────────────────────────────────────────────────
     const agendados = new Set<string>();
     const compareceram = new Set<string>();
-    const fecharam = new Set<string>();
     const pagaram = new Set<string>();
     let receita = 0;
 
@@ -101,9 +99,6 @@ export async function GET(request: NextRequest) {
       const k = chaveSistema(r);
       if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
         agendados.add(k);
-      }
-      if (r.data_contrato && (semFiltro || noPeriodo(r.data_contrato))) {
-        fecharam.add(k);
       }
       if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
         if (!pagaram.has(k)) {
@@ -149,12 +144,11 @@ export async function GET(request: NextRequest) {
 
     for (const r of sistemaRows || []) {
       if (!origemBate(r.origem)) continue;
-      if (r.data_contrato && (semFiltro || noPeriodo(r.data_contrato))) {
-        const ehPagto = !!r.data_pgto && (semFiltro || noPeriodo(r.data_pgto));
+      if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
         const valor = Number(r.vlr_contrato) || 0;
-        acumular(dentistas, r.dentista, valor, ehPagto);
-        acumular(atendentes, r.func_contrato, valor, ehPagto);
-        acumular(subCampanhas, r.campanha, valor, ehPagto);
+        acumular(dentistas, r.dentista, valor, true);
+        acumular(atendentes, r.func_contrato, valor, true);
+        acumular(subCampanhas, r.campanha, valor, true);
       }
       if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
         acumular(situacoes, r.situacao, 0, false);
@@ -184,7 +178,6 @@ export async function GET(request: NextRequest) {
     const mapEvolucao = new Map<string, {
       agendados: Set<string>;
       compareceram: Set<string>;
-      fecharam: Set<string>;
       pagaram: Set<string>;
       receita: number;
     }>();
@@ -192,7 +185,6 @@ export async function GET(request: NextRequest) {
       mapEvolucao.set(m, {
         agendados: new Set(),
         compareceram: new Set(),
-        fecharam: new Set(),
         pagaram: new Set(),
         receita: 0,
       });
@@ -204,8 +196,6 @@ export async function GET(request: NextRequest) {
       const k = chaveSistema(r);
       const ma = peg(r.data_avaliacao);
       if (ma && mapEvolucao.has(ma)) mapEvolucao.get(ma)!.agendados.add(k);
-      const mc = peg(r.data_contrato);
-      if (mc && mapEvolucao.has(mc)) mapEvolucao.get(mc)!.fecharam.add(k);
       const mp = peg(r.data_pgto);
       if (mp && mapEvolucao.has(mp)) {
         const acc = mapEvolucao.get(mp)!;
@@ -229,7 +219,6 @@ export async function GET(request: NextRequest) {
         rotulo: rotuloMes(m),
         agendados: a.agendados.size,
         compareceram: a.compareceram.size,
-        fecharam: a.fecharam.size,
         pagaram: a.pagaram.size,
         receita: a.receita,
       };
@@ -238,7 +227,6 @@ export async function GET(request: NextRequest) {
     // ── Comparacao com media geral ────────────────────────────────────────
     const totalAgendados = new Set<string>();
     const totalCompareceram = new Set<string>();
-    const totalFecharam = new Set<string>();
     const totalPagaram = new Set<string>();
     let receitaGeral = 0;
 
@@ -246,9 +234,6 @@ export async function GET(request: NextRequest) {
       const k = chaveSistema(r);
       if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
         totalAgendados.add(k);
-      }
-      if (r.data_contrato && (semFiltro || noPeriodo(r.data_contrato))) {
-        totalFecharam.add(k);
       }
       if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
         if (!totalPagaram.has(k)) receitaGeral += Number(r.vlr_contrato) || 0;
@@ -271,21 +256,18 @@ export async function GET(request: NextRequest) {
       kpis: {
         agendados: agendados.size,
         compareceram: compareceram.size,
-        fecharam: fecharam.size,
         pagaram: pagaram.size,
         receita,
         ticket_medio: ticketMedio,
       },
       taxas: {
         agend_comp: ratio(compareceram.size, agendados.size),
-        comp_fech: ratio(fecharam.size, compareceram.size),
-        fech_pag: ratio(pagaram.size, fecharam.size),
+        comp_pag: ratio(pagaram.size, compareceram.size),
       },
       media_geral: {
         ticket_medio: ticketMedioGeral,
         agend_comp: ratio(totalCompareceram.size, totalAgendados.size),
-        comp_fech: ratio(totalFecharam.size, totalCompareceram.size),
-        fech_pag: ratio(totalPagaram.size, totalFecharam.size),
+        comp_pag: ratio(totalPagaram.size, totalCompareceram.size),
       },
       evolucao,
       top: {

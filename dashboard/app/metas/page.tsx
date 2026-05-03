@@ -11,12 +11,11 @@ type Meta = {
   valor: number;
 };
 
-type TipoMeta = 'agendados' | 'compareceram' | 'fecharam' | 'pagaram';
+type TipoMeta = 'agendados' | 'compareceram' | 'pagaram';
 
 const TIPOS: { id: TipoMeta; nome: string; ehMoeda?: boolean }[] = [
   { id: 'agendados', nome: 'Agendados' },
   { id: 'compareceram', nome: 'Compareceram' },
-  { id: 'fecharam', nome: 'Fecharam' },
   { id: 'pagaram', nome: 'Pagaram' },
 ];
 
@@ -46,7 +45,7 @@ export default function MetasPage() {
   const [mes, setMes] = useState(mesAtual());
   const [unidadeId, setUnidadeId] = useState(1);
   const [valores, setValores] = useState<Record<TipoMeta, string>>({
-    agendados: '', compareceram: '', fecharam: '', pagaram: '',
+    agendados: '', compareceram: '', pagaram: '',
   });
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -64,10 +63,10 @@ export default function MetasPage() {
       const json = await res.json();
       if (json.error) {
         setErro(json.error);
-        setValores({ agendados: '', compareceram: '', fecharam: '', pagaram: '' });
+        setValores({ agendados: '', compareceram: '', pagaram: '' });
       } else {
         const novo: Record<TipoMeta, string> = {
-          agendados: '', compareceram: '', fecharam: '', pagaram: '',
+          agendados: '', compareceram: '', pagaram: '',
         };
         for (const m of json.metas as Meta[]) {
           if (m.tipo in novo) {
