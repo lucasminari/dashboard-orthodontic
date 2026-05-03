@@ -223,8 +223,6 @@ export default function Home() {
             <Origens origens={funilOrigens} unidadeId={unidadeId} />
           </div>
 
-          <ROIOrigem origens={funilOrigens} fmtBR={fmtBR} unidadeId={unidadeId} />
-
           <Lembretes
             lembretes={lembretes}
             corUrgencia={corUrgencia}
@@ -542,94 +540,3 @@ function Lembretes({
   );
 }
 
-function ROIOrigem({
-  origens,
-  fmtBR,
-  unidadeId,
-}: {
-  origens: FunilOrigem[];
-  fmtBR: (n: number) => string;
-  unidadeId?: number;
-}) {
-  const [outrosAberto, setOutrosAberto] = useState(false);
-  const comReceita = origens.filter(o => o.receita > 0 || o.fecharam > 0);
-
-  // Aplica mesma classificacao: Kommo sempre + top N do sistema por receita; resto vai pra Outros.
-  const kommo = comReceita
-    .filter(o => o.fonte === 'kommo')
-    .sort((a, b) => b.receita - a.receita);
-  const sistemaOrdenado = comReceita
-    .filter(o => o.fonte === 'sistema')
-    .sort((a, b) => b.receita - a.receita);
-  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
-  const outros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
-  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.receita - a.receita);
-  const outrosAgregado = agregarOutros(outros);
-  const linhas: FunilOrigem[] = [...principais];
-  if (outrosAgregado) linhas.push(outrosAgregado);
-
-  return (
-    <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
-      <div className="flex items-start justify-between mb-1">
-        <h2 className="text-lg font-semibold">Receita por origem</h2>
-        <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
-      </div>
-      <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
-      {linhas.length === 0 ? (
-        <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead className="text-xs text-gray-500 uppercase">
-            <tr className="border-b border-gray-800">
-              <th className="text-left py-2 font-normal">Origem</th>
-              <th className="text-right py-2 font-normal">Leads</th>
-              <th className="text-right py-2 font-normal">Fecharam</th>
-              <th className="text-right py-2 font-normal">Taxa</th>
-              <th className="text-right py-2 font-normal">Receita</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map(r => {
-              const isOutros = r.origem === 'Outros';
-              const taxa = r.cadastrados > 0 ? (r.fecharam / r.cadastrados) * 100 : 0;
-              return (
-                <Fragment key={r.origem}>
-                  <tr
-                    className={`border-b border-gray-800 hover:bg-gray-800/30 ${isOutros ? 'cursor-pointer' : ''}`}
-                    onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
-                  >
-                    <td className={`py-3 ${isOutros ? 'font-medium text-gray-200' : ''}`}>
-                      {isOutros && (
-                        <span className="text-xs text-gray-500 mr-1">{outrosAberto ? '▼' : '▶'}</span>
-                      )}
-                      {r.origem}
-                      {isOutros && <span className="ml-1 text-xs text-gray-500">({outros.length})</span>}
-                    </td>
-                    <td className="py-3 text-right text-gray-300">{r.cadastrados.toLocaleString('pt-BR')}</td>
-                    <td className="py-3 text-right text-emerald-400 font-semibold">
-                      {r.fecharam.toLocaleString('pt-BR')}
-                    </td>
-                    <td className="py-3 text-right text-gray-400">{taxa.toFixed(0)}%</td>
-                    <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
-                  </tr>
-                  {isOutros && outrosAberto && outros.map(sub => {
-                    const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
-                    return (
-                      <tr key={`sub-${sub.origem}`} className="border-b border-gray-800/50 bg-gray-950/50">
-                        <td className="py-2 pl-6 text-xs text-gray-400">{sub.origem}</td>
-                        <td className="py-2 text-right text-xs text-gray-500">{sub.cadastrados.toLocaleString('pt-BR')}</td>
-                        <td className="py-2 text-right text-xs text-emerald-500">{sub.fecharam.toLocaleString('pt-BR')}</td>
-                        <td className="py-2 text-right text-xs text-gray-500">{subTaxa.toFixed(0)}%</td>
-                        <td className="py-2 text-right text-xs text-emerald-500">R$ {fmtBR(sub.receita)}</td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}

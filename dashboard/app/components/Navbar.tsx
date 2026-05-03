@@ -33,7 +33,7 @@ export default function Navbar() {
                 : 'text-gray-300 hover:text-white'
             }`}
           >
-            Funil completo
+            Funil por campanha
           </Link>
           <Link
             href="/import"

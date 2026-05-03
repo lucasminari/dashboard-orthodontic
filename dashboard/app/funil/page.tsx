@@ -1,44 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, Fragment } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AtualizadoEm } from '../components/AtualizadoEm';
-
-const TOP_SISTEMA_PRINCIPAIS = 5;
-
-function classificarFunis(funis: FunilOrigem[]): { principais: FunilOrigem[]; outros: FunilOrigem[] } {
-  const ativas = funis.filter(f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0);
-  const kommo = ativas.filter(f => f.fonte === 'kommo');
-  const sistemaOrdenado = ativas.filter(f => f.fonte === 'sistema').sort((a, b) => b.cadastrados - a.cadastrados);
-  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
-  const outros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
-  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.cadastrados - a.cadastrados);
-  return { principais, outros };
-}
-
-function agregarFunis(funis: FunilOrigem[]): FunilOrigem | null {
-  if (funis.length === 0) return null;
-  const totais = funis.reduce(
-    (acc, f) => ({
-      cadastrados: acc.cadastrados + f.cadastrados,
-      agendados: acc.agendados + f.agendados,
-      compareceram: acc.compareceram + f.compareceram,
-      fecharam: acc.fecharam + f.fecharam,
-      pagaram: acc.pagaram + f.pagaram,
-      receita: acc.receita + f.receita,
-    }),
-    { cadastrados: 0, agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
-  );
-  const ratio = (n: number, d: number) => (d ? n / d : null);
-  return {
-    origem: 'Outros',
-    fonte: 'sistema',
-    ...totais,
-    taxa_cadastro_para_agendamento: ratio(totais.agendados, totais.cadastrados),
-    taxa_agendamento_para_comparecimento: ratio(totais.compareceram, totais.agendados),
-    taxa_comparecimento_para_fechamento: ratio(totais.fecharam, totais.compareceram),
-    taxa_fechamento_para_pagamento: ratio(totais.pagaram, totais.fecharam),
-  };
-}
 
 type FunilOrigem = {
   origem: string;
@@ -64,6 +27,7 @@ type RespostaFunil = {
     compareceram: number;
     fecharam: number;
     pagaram: number;
+    receita: number;
   };
   contagem: { leads: number; sistema: number; performance: number };
 };
@@ -82,6 +46,9 @@ const PERIODOS = [
   { id: '30d', nome: 'Mês anterior' },
   { id: 'mes', nome: 'Este mês' },
 ];
+
+// Limite minimo: campanhas com cadastrados <= MIN_PACIENTES vao pra "Outros"
+const MIN_PACIENTES = 3;
 
 function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
   const hoje = new Date();
@@ -106,7 +73,7 @@ function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
 
 function fmtPct(v: number | null): string {
   if (v === null || isNaN(v)) return '—';
-  return `${(v * 100).toFixed(1)}%`;
+  return `${(v * 100).toFixed(0)}%`;
 }
 
 export default function FunilPage() {
@@ -115,6 +82,7 @@ export default function FunilPage() {
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [outrosAberto, setOutrosAberto] = useState(false);
 
   const carregar = useCallback(async (uId: number, pId: string) => {
     setCarregando(true);
@@ -144,19 +112,24 @@ export default function FunilPage() {
     carregar(unidadeId, periodoId);
   }, [unidadeId, periodoId, carregar]);
 
-  // Mostra tudo numa lista unica, ordenada por cadastrados desc.
-  const todosFunis = (dados?.funis || [])
-    .filter(f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0)
+  // Classifica: campanhas com mais de MIN_PACIENTES = principais; resto = outros
+  const todas = (dados?.funis || []).filter(f => f.cadastrados > 0);
+  const principais = todas
+    .filter(f => f.cadastrados > MIN_PACIENTES)
     .sort((a, b) => b.cadastrados - a.cadastrados);
+  const outros = todas
+    .filter(f => f.cadastrados <= MIN_PACIENTES)
+    .sort((a, b) => b.cadastrados - a.cadastrados);
+
   const total = dados?.total;
 
   return (
     <main className="min-h-screen bg-black text-white p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">Funil completo por origem</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Funil por campanha</h1>
           <p className="text-gray-400 text-sm mt-1">
-            Caminho do lead do cadastro ao pagamento, juntando dados da Kommo e do sistema Orthodontic.
+            Caminho do lead do cadastro ao pagamento, separado por campanha de origem.
           </p>
           <div className="mt-2">
             <AtualizadoEm
@@ -195,7 +168,7 @@ export default function FunilPage() {
           <div className="ml-auto text-xs text-gray-500">
             {dados && (
               <>
-                {dados.contagem.leads} leads · {dados.contagem.sistema} no sistema · {dados.contagem.performance} no telemarketing
+                {dados.contagem.leads} leads · {dados.contagem.sistema} no sistema
               </>
             )}
           </div>
@@ -210,32 +183,62 @@ export default function FunilPage() {
 
         {!carregando && !erro && dados && (
           <>
-            {periodoId === 'tudo' && (
-              <div className="mb-6 bg-amber-950/30 border border-amber-800/50 text-amber-200 rounded-lg p-3 text-xs">
-                ⚠️ <strong>Sem filtro de data:</strong> a Kommo é usada há poucos meses, mas o sistema Orthodontic
-                tem leads antigos. Por isso pode aparecer "agendados &gt; cadastrados" — leads antigos com a mesma
-                origem agendam mas não estão na Kommo. Use um período recente (este mês, mês anterior) pra
-                números mais coerentes.
-              </div>
-            )}
-
             {/* Cards Total */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
-              <Card titulo="Cadastrados" valor={total?.cadastrados || 0} cor="blue" />
-              <Card titulo="Agendados" valor={total?.agendados || 0} cor="cyan" />
-              <Card titulo="Compareceram" valor={total?.compareceram || 0} cor="purple" />
-              <Card titulo="Fecharam" valor={total?.fecharam || 0} cor="amber" />
-              <Card titulo="Pagaram" valor={total?.pagaram || 0} cor="emerald" />
+              <CardTotal titulo="Cadastrados" valor={total?.cadastrados || 0} cor="blue" />
+              <CardTotal titulo="Agendados" valor={total?.agendados || 0} cor="cyan" />
+              <CardTotal titulo="Compareceram" valor={total?.compareceram || 0} cor="purple" />
+              <CardTotal titulo="Fecharam" valor={total?.fecharam || 0} cor="amber" />
+              <CardTotal titulo="Pagaram" valor={total?.pagaram || 0} cor="emerald" />
             </div>
 
-            {/* Tabela unica com todas as origens */}
-            <Section
-              titulo="Funil por origem"
-              descricao="Caminho do lead do cadastro ao pagamento, com todas as origens."
-              funis={todosFunis}
-              tiposAtualizacao={['leads', 'sistema', 'performance']}
-              unidadeId={unidadeId || undefined}
-            />
+            {principais.length === 0 && outros.length === 0 ? (
+              <div className="text-gray-500 text-sm py-8 text-center bg-gray-900 border border-gray-800 rounded-xl">
+                Nenhuma campanha com leads no período selecionado.
+              </div>
+            ) : (
+              <>
+                {/* Grid de mini-funis */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                  {principais.map(f => (
+                    <MiniFunil key={f.origem} f={f} />
+                  ))}
+                </div>
+
+                {/* Outros expansivel */}
+                {outros.length > 0 && (
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setOutrosAberto(v => !v)}
+                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-800/40 transition"
+                    >
+                      <div className="flex items-center gap-2 text-left">
+                        <span className="text-gray-400 text-sm">{outrosAberto ? '▼' : '▶'}</span>
+                        <div>
+                          <div className="font-medium text-gray-200">
+                            Outros ({outros.length} {outros.length === 1 ? 'campanha' : 'campanhas'})
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Campanhas com até {MIN_PACIENTES} pacientes — clique para detalhar
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400 hidden sm:block">
+                        Total: {outros.reduce((s, o) => s + o.cadastrados, 0)} cad. ·{' '}
+                        {outros.reduce((s, o) => s + o.pagaram, 0)} pag.
+                      </div>
+                    </button>
+                    {outrosAberto && (
+                      <div className="p-4 border-t border-gray-800 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {outros.map(f => (
+                          <MiniFunil key={f.origem} f={f} compact />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </>
         )}
       </div>
@@ -243,7 +246,7 @@ export default function FunilPage() {
   );
 }
 
-function Card({ titulo, valor, cor }: { titulo: string; valor: number; cor: string }) {
+function CardTotal({ titulo, valor, cor }: { titulo: string; valor: number; cor: string }) {
   const cores: Record<string, string> = {
     blue: 'border-blue-700/60 bg-blue-950/30 text-blue-100',
     cyan: 'border-cyan-700/60 bg-cyan-950/30 text-cyan-100',
@@ -259,113 +262,51 @@ function Card({ titulo, valor, cor }: { titulo: string; valor: number; cor: stri
   );
 }
 
-function Section({
-  titulo,
-  descricao,
-  funis,
-  tiposAtualizacao,
-  unidadeId,
-}: {
-  titulo: string;
-  descricao: string;
-  funis: FunilOrigem[];
-  tiposAtualizacao?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
-  unidadeId?: number;
-}) {
-  const [outrosAberto, setOutrosAberto] = useState(false);
-  if (funis.length === 0) return null;
-
-  const { principais, outros } = classificarFunis(funis);
-  const outrosAgregado = agregarFunis(outros);
-  const linhas: FunilOrigem[] = [...principais];
-  if (outrosAgregado) linhas.push(outrosAgregado);
+function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }) {
+  const etapas = [
+    { nome: 'Cadastrados', valor: f.cadastrados, cor: '#6366f1', taxa: null as number | null },
+    { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: f.taxa_cadastro_para_agendamento },
+    { nome: 'Compareceram', valor: f.compareceram, cor: '#a855f7', taxa: f.taxa_agendamento_para_comparecimento },
+    { nome: 'Fecharam', valor: f.fecharam, cor: '#eab308', taxa: f.taxa_comparecimento_para_fechamento },
+    { nome: 'Pagaram', valor: f.pagaram, cor: '#10b981', taxa: f.taxa_fechamento_para_pagamento },
+  ];
+  const max = Math.max(...etapas.map(e => e.valor), 1);
 
   return (
-    <section className="mb-10">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">{titulo}</h2>
-          <p className="text-gray-400 text-sm">{descricao}</p>
-        </div>
-        {tiposAtualizacao && (
-          <AtualizadoEm tipos={tiposAtualizacao} unidadeId={unidadeId} />
+    <div className={`bg-gray-900 border border-gray-800 rounded-lg ${compact ? 'p-3' : 'p-5'}`}>
+      <div className={`flex items-baseline justify-between mb-${compact ? '2' : '4'}`}>
+        <h3 className={`font-semibold ${compact ? 'text-sm' : 'text-base'} text-gray-100 truncate pr-2`}>
+          {f.origem}
+        </h3>
+        {f.receita > 0 && (
+          <span className={`text-emerald-400 font-medium ${compact ? 'text-[10px]' : 'text-xs'} whitespace-nowrap`}>
+            R$ {f.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
         )}
       </div>
-
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-800/60 text-gray-300 text-xs uppercase tracking-wider">
-              <tr>
-                <th className="text-left px-4 py-3">Origem</th>
-                <th className="text-right px-3 py-3">Cadastr.</th>
-                <th className="text-right px-3 py-3 text-blue-300">→ Agend.</th>
-                <th className="text-right px-3 py-3">Agend.</th>
-                <th className="text-right px-3 py-3 text-blue-300">→ Compar.</th>
-                <th className="text-right px-3 py-3">Compar.</th>
-                <th className="text-right px-3 py-3 text-blue-300">→ Fechou</th>
-                <th className="text-right px-3 py-3">Fecharam</th>
-                <th className="text-right px-3 py-3 text-blue-300">→ Pagou</th>
-                <th className="text-right px-3 py-3">Pagaram</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((f, i) => {
-                const isOutros = f.origem === 'Outros';
-                return (
-                  <Fragment key={f.origem}>
-                    <tr
-                      className={`border-t border-gray-800 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-900/50'} ${isOutros ? 'cursor-pointer hover:bg-gray-800/50' : ''}`}
-                      onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
-                    >
-                      <td className={`px-4 py-3 ${isOutros ? 'font-semibold text-gray-200' : 'font-medium'}`}>
-                        {isOutros && (
-                          <span className="text-xs text-gray-500 mr-1">{outrosAberto ? '▼' : '▶'}</span>
-                        )}
-                        {f.origem}
-                        {isOutros && <span className="ml-1 text-xs text-gray-500">({outros.length})</span>}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">{f.cadastrados}</td>
-                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                        {fmtPct(f.taxa_cadastro_para_agendamento)}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">{f.agendados}</td>
-                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                        {fmtPct(f.taxa_agendamento_para_comparecimento)}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">{f.compareceram}</td>
-                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                        {fmtPct(f.taxa_comparecimento_para_fechamento)}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums">{f.fecharam}</td>
-                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                        {fmtPct(f.taxa_fechamento_para_pagamento)}
-                      </td>
-                      <td className="px-3 py-3 text-right tabular-nums font-semibold text-emerald-300">
-                        {f.pagaram}
-                      </td>
-                    </tr>
-                    {isOutros && outrosAberto && outros.map(sub => (
-                      <tr key={`sub-${sub.origem}`} className="border-t border-gray-800/50 bg-gray-950/40">
-                        <td className="px-4 py-2 pl-10 text-xs text-gray-400">{sub.origem}</td>
-                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.cadastrados}</td>
-                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_cadastro_para_agendamento)}</td>
-                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.agendados}</td>
-                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_agendamento_para_comparecimento)}</td>
-                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.compareceram}</td>
-                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_comparecimento_para_fechamento)}</td>
-                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.fecharam}</td>
-                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_fechamento_para_pagamento)}</td>
-                        <td className="px-3 py-2 text-right text-xs text-emerald-400 tabular-nums">{sub.pagaram}</td>
-                      </tr>
-                    ))}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <div className={`space-y-${compact ? '1' : '2'}`}>
+        {etapas.map(e => {
+          const pct = (e.valor / max) * 100;
+          return (
+            <div key={e.nome} className="flex items-center gap-2">
+              <div className={`${compact ? 'w-20 text-[10px]' : 'w-24 text-xs'} text-gray-400 shrink-0`}>{e.nome}</div>
+              <div className={`flex-1 bg-gray-800 rounded ${compact ? 'h-5' : 'h-6'} relative overflow-hidden`}>
+                <div
+                  className="h-full rounded flex items-center pl-2"
+                  style={{ width: `${pct}%`, backgroundColor: e.cor, minWidth: e.valor > 0 ? '24px' : '0' }}
+                >
+                  <span className={`${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-white`}>
+                    {e.valor}
+                  </span>
+                </div>
+              </div>
+              <div className={`${compact ? 'w-9 text-[10px]' : 'w-10 text-xs'} text-right text-gray-500 shrink-0`}>
+                {e.taxa === null ? '' : fmtPct(e.taxa)}
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </section>
+    </div>
   );
 }
