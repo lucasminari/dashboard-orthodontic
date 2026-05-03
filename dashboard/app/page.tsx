@@ -9,6 +9,7 @@ import { Skeleton, SkeletonCard } from './components/Skeleton';
 import { Tooltip } from './components/Tooltip';
 import { ExportarCSV } from './components/ExportarCSV';
 import { BarraMeta } from './components/BarraMeta';
+import { MatrizConversoes } from './components/MatrizConversoes';
 
 type TotalFunil = {
   cadastrados: number;
@@ -317,6 +318,13 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
           );
         })}
       </div>
+      <MatrizConversoes
+        cadastrados={total.cadastrados}
+        agendados={total.agendados}
+        compareceram={total.compareceram}
+        fecharam={total.fecharam}
+        pagaram={total.pagaram}
+      />
     </div>
   );
 }

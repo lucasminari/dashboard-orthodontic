@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AtualizadoEm } from '../components/AtualizadoEm';
 import { useFiltros, UNIDADES, PERIODOS } from '../components/useFiltros';
 import { Skeleton } from '../components/Skeleton';
+import { MatrizConversoes } from '../components/MatrizConversoes';
 
 type FunilOrigem = {
   origem: string;
@@ -228,6 +229,14 @@ function CampanhaCard({
           <FunilPerda f={f} />
         </div>
       </div>
+      <MatrizConversoes
+        cadastrados={f.cadastrados}
+        agendados={f.agendados}
+        compareceram={f.compareceram}
+        fecharam={f.fecharam}
+        pagaram={f.pagaram}
+        compacto
+      />
     </div>
   );
 }

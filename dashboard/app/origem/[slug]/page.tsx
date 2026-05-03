@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { AtualizadoEm } from '../../components/AtualizadoEm';
+import { MatrizConversoes } from '../../components/MatrizConversoes';
 
 type ItemRanking = { nome: string; total: number; receita?: number };
 
@@ -213,6 +214,16 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <FunilInvertido kpis={dados.kpis} taxas={dados.taxas} mediaGeral={dados.media_geral} />
               <EvolucaoMensal evolucao={dados.evolucao} />
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <MatrizConversoes
+                cadastrados={dados.kpis.cadastrados}
+                agendados={dados.kpis.agendados}
+                compareceram={dados.kpis.compareceram}
+                fecharam={dados.kpis.fecharam}
+                pagaram={dados.kpis.pagaram}
+              />
             </div>
 
             {/* Top rankings em grid */}
