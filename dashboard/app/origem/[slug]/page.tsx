@@ -53,7 +53,6 @@ type RespostaDetalhe = {
 };
 
 const UNIDADES = [
-  { id: 0, nome: 'Todas as unidades' },
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
   { id: 3, nome: 'Hortolândia' },
@@ -101,7 +100,7 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
   const { slug } = use(params);
   const origem = decodeURIComponent(slug);
 
-  const [unidadeId, setUnidadeId] = useState(0);
+  const [unidadeId, setUnidadeId] = useState(1);
   const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);

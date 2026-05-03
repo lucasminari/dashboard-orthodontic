@@ -26,7 +26,6 @@ type Lembrete = {
 };
 
 const UNIDADES = [
-  { id: 0, nome: 'Todas as unidades' },
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
   { id: 3, nome: 'Hortolândia' },
@@ -62,7 +61,7 @@ function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
 }
 
 export default function Home() {
-  const [unidadeId, setUnidadeId] = useState(0);
+  const [unidadeId, setUnidadeId] = useState(1);
   const [periodoId, setPeriodoId] = useState('tudo');
   const [desdePersonalizado, setDesdePersonalizado] = useState('');
   const [atePersonalizado, setAtePersonalizado] = useState('');

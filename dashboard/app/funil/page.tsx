@@ -39,7 +39,6 @@ type RespostaTendencia = {
 };
 
 const UNIDADES = [
-  { id: 0, nome: 'Todas as unidades' },
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
   { id: 3, nome: 'Hortolândia' },
@@ -83,7 +82,7 @@ function fmtPct(v: number | null): string {
 }
 
 export default function FunilPage() {
-  const [unidadeId, setUnidadeId] = useState(0);
+  const [unidadeId, setUnidadeId] = useState(1);
   const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);

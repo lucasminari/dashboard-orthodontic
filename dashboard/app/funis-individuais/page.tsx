@@ -32,7 +32,6 @@ type RespostaFunil = {
 };
 
 const UNIDADES = [
-  { id: 0, nome: 'Todas as unidades' },
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
   { id: 3, nome: 'Hortolândia' },
@@ -46,7 +45,7 @@ const PERIODOS = [
   { id: 'mes', nome: 'Este mês' },
 ];
 
-const MIN_PACIENTES = 3;
+const ORIGENS_KOMMO = ['Mídia Real', 'DBOUT', 'PitchYes', 'Sorriso Novo', 'Galú'];
 
 function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
   const hoje = new Date();
@@ -75,12 +74,11 @@ function fmtPct(v: number | null): string {
 }
 
 export default function FunisIndividuaisPage() {
-  const [unidadeId, setUnidadeId] = useState(0);
+  const [unidadeId, setUnidadeId] = useState(1);
   const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [outrosAberto, setOutrosAberto] = useState(false);
 
   const carregar = useCallback(async (uId: number, pId: string) => {
     setCarregando(true);
@@ -94,7 +92,7 @@ export default function FunisIndividuaisPage() {
     try {
       const res = await fetch(`/api/funil-completo?${params.toString()}`);
       const json = await res.json();
-      if (!res.ok) setErro(json.error || 'Erro');
+      if (json.error) setErro(json.error);
       else setDados(json);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro');
@@ -107,13 +105,35 @@ export default function FunisIndividuaisPage() {
     carregar(unidadeId, periodoId);
   }, [unidadeId, periodoId, carregar]);
 
-  const todas = (dados?.funis || []).filter(f => f.cadastrados > 0);
-  const principais = todas
-    .filter(f => f.cadastrados > MIN_PACIENTES)
+  // Mostra TODAS as campanhas individualmente — sem agrupar em "Outros".
+  // As 5 origens Kommo aparecem sempre, mesmo zeradas, pra dar visibilidade
+  // a campanhas pagas que estao sem performance no periodo.
+  const funisRecebidos = dados?.funis || [];
+  const mapPorOrigem = new Map(funisRecebidos.map(f => [f.origem, f]));
+  const kommoFunis: FunilOrigem[] = ORIGENS_KOMMO.map(nome => {
+    const existente = mapPorOrigem.get(nome);
+    if (existente) return existente;
+    return {
+      origem: nome,
+      fonte: 'kommo' as const,
+      cadastrados: 0,
+      agendados: 0,
+      compareceram: 0,
+      fecharam: 0,
+      pagaram: 0,
+      receita: 0,
+      taxa_cadastro_para_agendamento: null,
+      taxa_agendamento_para_comparecimento: null,
+      taxa_comparecimento_para_fechamento: null,
+      taxa_fechamento_para_pagamento: null,
+    };
+  });
+  // Sistema (nao-Kommo): so mostra com cadastrados > 0, por volume
+  const sistemaFunis = funisRecebidos
+    .filter(f => f.fonte === 'sistema' && f.cadastrados > 0)
     .sort((a, b) => b.cadastrados - a.cadastrados);
-  const outros = todas
-    .filter(f => f.cadastrados <= MIN_PACIENTES)
-    .sort((a, b) => b.cadastrados - a.cadastrados);
+
+  const todasCampanhas = [...kommoFunis, ...sistemaFunis];
 
   return (
     <main className="min-h-screen bg-black text-white p-6 md:p-10">
@@ -164,46 +184,14 @@ export default function FunisIndividuaisPage() {
 
         {!carregando && !erro && dados && (
           <>
-            {principais.length === 0 && outros.length === 0 ? (
+            {todasCampanhas.length === 0 ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">
                 Nenhuma campanha com leads no período selecionado.
               </div>
             ) : (
-              <>
-                <div className="space-y-4">
-                  {principais.map(f => <CampanhaCard key={f.origem} f={f} />)}
-                </div>
-
-                {outros.length > 0 && (
-                  <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => setOutrosAberto(v => !v)}
-                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-800/40 transition"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-400 text-sm">{outrosAberto ? '▼' : '▶'}</span>
-                        <div className="text-left">
-                          <div className="font-medium text-gray-200">
-                            Outros ({outros.length} {outros.length === 1 ? 'campanha' : 'campanhas'})
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Campanhas com até {MIN_PACIENTES} pacientes
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-400 hidden sm:block">
-                        {outros.reduce((s, o) => s + o.cadastrados, 0)} cad. ·{' '}
-                        {outros.reduce((s, o) => s + o.pagaram, 0)} pag.
-                      </div>
-                    </button>
-                    {outrosAberto && (
-                      <div className="p-4 border-t border-gray-800 space-y-4">
-                        {outros.map(f => <CampanhaCard key={f.origem} f={f} />)}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
+              <div className="space-y-4">
+                {todasCampanhas.map(f => <CampanhaCard key={f.origem} f={f} />)}
+              </div>
             )}
           </>
         )}
