@@ -233,28 +233,27 @@ function CampanhaCard({ f }: { f: FunilOrigem }) {
           <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2 text-center">
             Funil de conversão
           </div>
-          <FunilSVG f={f} invertido={false} />
+          <FunilConversao f={f} />
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2 text-center">
-            Funil invertido
+            Onde perde leads
           </div>
-          <FunilSVG f={f} invertido={true} />
+          <FunilPerda f={f} />
         </div>
       </div>
     </div>
   );
 }
 
-function FunilSVG({ f, invertido }: { f: FunilOrigem; invertido: boolean }) {
-  const etapasBase = [
+function FunilConversao({ f }: { f: FunilOrigem }) {
+  const etapas = [
     { nome: 'Cadastrados', valor: f.cadastrados, cor: '#6366f1', taxa: null as number | null },
     { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: f.taxa_cadastro_para_agendamento },
     { nome: 'Compareceram', valor: f.compareceram, cor: '#a855f7', taxa: f.taxa_agendamento_para_comparecimento },
     { nome: 'Fecharam', valor: f.fecharam, cor: '#eab308', taxa: f.taxa_comparecimento_para_fechamento },
     { nome: 'Pagaram', valor: f.pagaram, cor: '#10b981', taxa: f.taxa_fechamento_para_pagamento },
   ];
-  const etapas = invertido ? [...etapasBase].reverse() : etapasBase;
   const max = Math.max(...etapas.map(e => e.valor), 1);
   const minLg = 12;
   const maxLg = 100;
@@ -282,20 +281,99 @@ function FunilSVG({ f, invertido }: { f: FunilOrigem; invertido: boolean }) {
                 </div>
               </div>
             </div>
-            {/* Taxa entre etapas (só pra funil normal) */}
-            {!invertido && i < etapas.length - 1 && taxaProx !== null && (
+            {i < etapas.length - 1 && taxaProx !== null && (
               <div className="text-center text-[10px] text-gray-500 py-0.5">
                 ↓ {fmtPct(taxaProx)}
-              </div>
-            )}
-            {invertido && i < etapas.length - 1 && etapas[i].taxa !== null && (
-              <div className="text-center text-[10px] text-gray-500 py-0.5">
-                ↑ {fmtPct(etapas[i].taxa)}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function FunilPerda({ f }: { f: FunilOrigem }) {
+  // Cada "degrau" mostra quantos lead perderam entre etapa N e N+1
+  const transicoes = [
+    {
+      de: 'Cadastrados',
+      para: 'Agendados',
+      perdidos: f.cadastrados - f.agendados,
+      base: f.cadastrados,
+    },
+    {
+      de: 'Agendados',
+      para: 'Compareceram',
+      perdidos: f.agendados - f.compareceram,
+      base: f.agendados,
+    },
+    {
+      de: 'Compareceram',
+      para: 'Fecharam',
+      perdidos: f.compareceram - f.fecharam,
+      base: f.compareceram,
+    },
+    {
+      de: 'Fecharam',
+      para: 'Pagaram',
+      perdidos: f.fecharam - f.pagaram,
+      base: f.fecharam,
+    },
+  ].map(t => ({
+    ...t,
+    pct: t.base > 0 ? t.perdidos / t.base : 0,
+    perdidos: Math.max(t.perdidos, 0), // Se inversao (mais comp que agend), trata como 0
+  }));
+
+  const maxPerda = Math.max(...transicoes.map(t => t.perdidos), 1);
+  const totalPerdido = transicoes.reduce((s, t) => s + t.perdidos, 0);
+  const maiorPerdaIdx = transicoes.findIndex(
+    t => t.perdidos === Math.max(...transicoes.map(x => x.perdidos))
+  );
+
+  return (
+    <div className="space-y-2">
+      {transicoes.map((t, i) => {
+        const lg = t.perdidos === 0 ? 0 : Math.max((t.perdidos / maxPerda) * 100, 8);
+        const isGargalo = i === maiorPerdaIdx && t.perdidos > 0;
+        return (
+          <div key={`${t.de}-${t.para}`} className="space-y-1">
+            <div className="flex items-baseline justify-between text-[10px]">
+              <span className={`${isGargalo ? 'text-red-300 font-semibold' : 'text-gray-400'}`}>
+                {t.de} → {t.para}
+                {isGargalo && <span className="ml-1 text-red-400">⚠ maior gargalo</span>}
+              </span>
+              <span className={`tabular-nums ${isGargalo ? 'text-red-300 font-semibold' : 'text-gray-500'}`}>
+                {t.perdidos > 0 ? `−${t.perdidos}` : '0'} ({(t.pct * 100).toFixed(0)}%)
+              </span>
+            </div>
+            <div className="bg-gray-800/60 rounded h-5 overflow-hidden relative">
+              <div
+                className="h-full rounded transition-all"
+                style={{
+                  width: `${lg}%`,
+                  background: isGargalo
+                    ? 'linear-gradient(135deg, #dc2626, #991b1b)'
+                    : 'linear-gradient(135deg, #ef4444aa, #b91c1caa)',
+                  minWidth: t.perdidos > 0 ? '24px' : '0',
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="pt-2 mt-2 border-t border-gray-800 flex items-baseline justify-between text-[11px]">
+        <span className="text-gray-400">Total perdido no funil</span>
+        <span className="text-red-300 font-semibold tabular-nums">
+          −{totalPerdido} de {f.cadastrados}
+          {f.cadastrados > 0 && (
+            <span className="text-gray-500 font-normal ml-1">
+              ({((totalPerdido / f.cadastrados) * 100).toFixed(0)}%)
+            </span>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
