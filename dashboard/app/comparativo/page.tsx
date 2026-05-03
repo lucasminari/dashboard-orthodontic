@@ -55,7 +55,7 @@ function fmtPct(v: number | null): string {
 }
 
 export default function ComparativoPage() {
-  const { periodoId, intervalo, pronto } = useFiltros('mes');
+  const { periodoId, intervalo, pronto } = useFiltros('30dias');
   const [unidades, setUnidades] = useState<DadosUnidade[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);

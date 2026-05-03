@@ -32,8 +32,11 @@ export const PERIODOS: { id: PeriodoId; nome: string }[] = [
   { id: 'tudo', nome: 'Tudo' },
 ];
 
-const KEY_UNIDADE = 'filtro-unidade-id';
-const KEY_PERIODO = 'filtro-periodo-id';
+// Versao do schema do filtro persistido. Bumpar quando mudar o default
+// pra invalidar localStorage de usuarios antigos.
+const VERSAO_FILTRO = 2;
+const KEY_UNIDADE = `filtro-unidade-id-v${VERSAO_FILTRO}`;
+const KEY_PERIODO = `filtro-periodo-id-v${VERSAO_FILTRO}`;
 
 function fmtData(d: Date): string {
   return d.toISOString().slice(0, 10);
