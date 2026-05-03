@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { tentarOrigemPorPromotor } from './origem-mapeamento';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -303,7 +304,15 @@ async function processarSistema(
       const nomeLimpo = matchId ? matchId[2].trim() : nomeBruto.trim();
 
       const telOrig = l['Telefone'];
-      const { campanha, origem } = parseCampanhaOrigem(l['Campanha -|- Origem -|- Evento']);
+      const { campanha, origem: origemBruta } = parseCampanhaOrigem(l['Campanha -|- Origem -|- Evento']);
+      const promotor = l['Promotor'] || null;
+
+      // FALLBACK: quando o Sistema nao popula Origem direito (vem "0", null,
+      // vazio), tenta usar o Promotor — mas SO se for uma fonte externa
+      // conhecida (UPDONTIC, Mídia Real, DBOUT, etc.). Nomes de funcionarias
+      // internas (ex: "JULIA TEDESCO") nao viram origem, ficam como Sem origem.
+      const origemNormalizada = origemBruta && origemBruta !== '0' ? origemBruta : null;
+      const origemFinal = origemNormalizada || tentarOrigemPorPromotor(promotor) || origemBruta;
 
       return {
         unidade_id: unidadeId,
@@ -317,10 +326,10 @@ async function processarSistema(
         data_pgto: parseDataBR(l['Data Pgto']),
         func_contrato: l['Func. Contrato'] || null,
         campanha,
-        origem,
+        origem: origemFinal,
         indicacao: l['Indicação'] || null,
         dentista: l['Dentista'] || null,
-        promotor: l['Promotor'] || null,
+        promotor,
         situacao: l['Situação'] || null,
         vlr_contrato: parseValorSimples(l['Vl.Contrato']),
         parcela_status: l['Parcela'] || null,

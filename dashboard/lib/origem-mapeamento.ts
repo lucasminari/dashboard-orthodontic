@@ -20,13 +20,31 @@ export const ORIGENS_KOMMO_CANONICAS = [
 
 export type OrigemKommoCanonica = (typeof ORIGENS_KOMMO_CANONICAS)[number];
 
+// Promotoras/parceiros externos que tambem sao "fontes" de leads
+// (alem das 5 do Kommo). Aparecem na coluna Promotor do Sistema
+// quando a coluna Origem vem zerada — o parser usa isso como fallback.
+export const ORIGENS_EXTERNAS_NAO_KOMMO = [
+  'UPDONTIC',
+] as const;
+
+export type OrigemExternaNaoKommo = (typeof ORIGENS_EXTERNAS_NAO_KOMMO)[number];
+
+// Conjunto de TODAS as origens externas conhecidas (Kommo + parceiros)
+// usado pelo parser pra decidir se um Promotor deve virar origem.
+export const ORIGENS_EXTERNAS_CONHECIDAS = [
+  ...ORIGENS_KOMMO_CANONICAS,
+  ...ORIGENS_EXTERNAS_NAO_KOMMO,
+] as const;
+
+export type OrigemCanonica = OrigemKommoCanonica | OrigemExternaNaoKommo;
+
 export const ROTULO_SEM_ORIGEM = 'Sem origem';
 
 // Mapa de aliases para canonicas. Comparacao em lowercase + trim para tolerar
 // variacoes de caixa, espacos extras e acentos diferentes.
-const ALIASES_LOWER: Record<string, OrigemKommoCanonica> = {};
+const ALIASES_LOWER: Record<string, OrigemCanonica> = {};
 
-function registrarAlias(canonica: OrigemKommoCanonica, ...aliases: string[]) {
+function registrarAlias(canonica: OrigemCanonica, ...aliases: string[]) {
   for (const a of aliases) {
     ALIASES_LOWER[a.toLowerCase().trim()] = canonica;
   }
@@ -86,6 +104,18 @@ registrarAlias(
   'GALU',
 );
 
+// UPDONTIC ─ promotora externa que tambem agenda direto. Aparece na coluna
+// Promotor do Sistema (origem do Sistema vem zerada) e na coluna Origem do
+// Performance (telemarketing).
+registrarAlias(
+  'UPDONTIC',
+  'UPDONTIC',
+  'Updontic',
+  'updontic',
+  'UPDONTIC ',
+  'UPD',
+);
+
 const VAZIOS = new Set<string>(['', '0', 'null', 'undefined', 'origem desconhecida']);
 
 /**
@@ -141,4 +171,24 @@ export function mapearOrigem(raw: string | null | undefined): string {
  */
 export function isOrigemKommo(canonica: string): canonica is OrigemKommoCanonica {
   return (ORIGENS_KOMMO_CANONICAS as readonly string[]).includes(canonica);
+}
+
+/**
+ * Indica se uma string (um Promotor, por exemplo) corresponde a uma fonte
+ * externa conhecida (Kommo ou parceira). Usado pelo parser do Sistema como
+ * fallback quando a coluna Origem vem vazia/0.
+ *
+ * Retorna o nome canonico se for uma fonte conhecida, ou null caso contrario
+ * (ex: nomes de funcionarias internas).
+ */
+export function tentarOrigemPorPromotor(promotor: string | null | undefined): string | null {
+  if (!promotor) return null;
+  const canonica = mapearOrigem(promotor);
+  if (canonica === ROTULO_SEM_ORIGEM) return null;
+  // Soh aceita se canonizou pra uma fonte EXTERNA conhecida (Kommo + parceiras).
+  // Nomes nao mapeados (funcionarias internas como "JULIA TEDESCO") caem aqui.
+  if ((ORIGENS_EXTERNAS_CONHECIDAS as readonly string[]).includes(canonica)) {
+    return canonica;
+  }
+  return null;
 }
