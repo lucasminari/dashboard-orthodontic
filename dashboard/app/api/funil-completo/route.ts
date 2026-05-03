@@ -90,18 +90,27 @@ export async function GET(request: NextRequest) {
     if (errLeads) throw new Error(`raw_leads: ${errLeads.message}`);
 
     // ── 2. raw_sistema (Orthodontic) ───────────────────────────────────────
+    // NAO filtramos por data_avaliacao na query: cada etapa usa sua propria
+    // data (avaliacao, contrato ou pgto). O filtro de periodo eh aplicado
+    // por etapa abaixo, no acumulador.
     let qSis = supabase
       .from('raw_sistema')
       .select(
         'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id',
       );
     if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
-    // Para o sistema, usamos data_avaliacao como referencia temporal principal,
-    // mas tambem aceitamos linhas com qualquer data dentro do periodo.
-    if (dataInicio) qSis = qSis.gte('data_avaliacao', dataInicio);
-    if (dataFim) qSis = qSis.lte('data_avaliacao', dataFim);
     const { data: sistemaRows, error: errSis } = await qSis;
     if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
+
+    // Helpers de filtro de periodo (datas em YYYY-MM-DD)
+    const noPeriodo = (data: string | null | undefined): boolean => {
+      if (!data) return false;
+      const d = data.slice(0, 10);
+      if (dataInicio && d < dataInicio) return false;
+      if (dataFim && d > dataFim) return false;
+      return true;
+    };
+    const semFiltro = !dataInicio && !dataFim;
 
     // ── 3. raw_performance (Telemarketing) ─────────────────────────────────
     let qPerf = supabase
@@ -133,21 +142,31 @@ export async function GET(request: NextRequest) {
     }
 
     // Para origens Sistema (nao-Kommo): 1 cadastrado por paciente unico no
-    // raw_sistema (porque o lead nasce direto la).
+    // raw_sistema (porque o lead nasce direto la). Como nao temos data de
+    // cadastro confiavel no sistema, usamos data_avaliacao como proxy. Sem
+    // filtro de periodo, conta todos os pacientes.
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
       if (isOrigemKommo(origem)) continue;
+      if (!semFiltro && !noPeriodo(r.data_avaliacao)) continue;
       get(origem).cadastrados.add(chavePacienteSistema(r));
     }
 
-    // ── 6. Agendados / Fecharam / Pagaram (sempre raw_sistema) ─────────────
+    // ── 6. Agendados / Fecharam / Pagaram (raw_sistema, filtro por etapa) ──
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
       const a = get(origem);
       const k = chavePacienteSistema(r);
-      if (r.data_avaliacao) a.agendados.add(k);
-      if (r.data_contrato) a.fecharam.add(k);
-      if (r.data_pgto) a.pagaram.add(k);
+      // Cada etapa filtra pela sua propria data dentro do periodo escolhido.
+      if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
+        a.agendados.add(k);
+      }
+      if (r.data_contrato && (semFiltro || noPeriodo(r.data_contrato))) {
+        a.fecharam.add(k);
+      }
+      if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
+        a.pagaram.add(k);
+      }
     }
 
     // ── 7. Compareceram ───────────────────────────────────────────────────
