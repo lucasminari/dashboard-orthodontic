@@ -152,12 +152,15 @@ export async function GET(request: NextRequest) {
       get(origem).cadastrados.add(chavePacienteSistema(r));
     }
 
-    // ── 6. Agendados / Fecharam / Pagaram (raw_sistema, filtro por etapa) ──
+    // ── 6. Agendados / Fecharam / Pagaram (raw_sistema + raw_performance) ──
+    // Agendados eh UNIAO de:
+    //  - pacientes em raw_sistema com data_avaliacao no periodo
+    //  - pacientes em raw_performance com data no periodo (todos do perf
+    //    foram agendados em algum momento — esta na base de telemarketing)
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
       const a = get(origem);
       const k = chavePacienteSistema(r);
-      // Cada etapa filtra pela sua propria data dentro do periodo escolhido.
       if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
         a.agendados.add(k);
       }
@@ -168,25 +171,35 @@ export async function GET(request: NextRequest) {
         a.pagaram.add(k);
       }
     }
+    for (const r of perfRows || []) {
+      const origem = mapearOrigem(r.origem);
+      const a = get(origem);
+      const k = chavePacientePerf(r);
+      // raw_performance: cada linha eh um atendimento. Se tem registro,
+      // foi agendado.
+      if (semFiltro || noPeriodo(r.data)) {
+        a.agendados.add(k);
+      }
+    }
 
     // ── 7. Compareceram ───────────────────────────────────────────────────
-    // Preferencia: raw_performance (mais granular). Conta paciente unico que
-    // teve compareceu=true em qualquer linha.
+    // Pacientes unicos com compareceu=true no raw_performance (no periodo).
     for (const r of perfRows || []) {
       if (!r.compareceu) continue;
+      if (!semFiltro && !noPeriodo(r.data)) continue;
       const origem = mapearOrigem(r.origem);
       get(origem).compareceram.add(chavePacientePerf(r));
     }
 
-    // Fallback: se a origem tem agendados mas zero compareceram do raw_perf,
-    // tentamos inferir a partir do raw_sistema (data_avaliacao preenchida e
-    // situacao nao indica falta/cancelamento).
+    // Fallback: se origem tem agendados mas zero compareceram, infere a
+    // partir do raw_sistema (paciente avaliado e nao faltou).
     for (const [origem, a] of acc.entries()) {
       if (a.compareceram.size > 0 || a.agendados.size === 0) continue;
       for (const r of sistemaRows || []) {
         const o = mapearOrigem(r.origem);
         if (o !== origem) continue;
         if (!r.data_avaliacao) continue;
+        if (!semFiltro && !noPeriodo(r.data_avaliacao)) continue;
         const sit = String(r.situacao || '').toLowerCase();
         if (sit.includes('faltou') || sit.includes('cancel')) continue;
         a.compareceram.add(chavePacienteSistema(r));
