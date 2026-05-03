@@ -26,13 +26,17 @@ export async function GET() {
         .map(([mes, total]) => ({ mes, total }));
     };
 
+    // Pega as 10 linhas com data_avaliacao mais recente
+    const ordenadas = [...(data || [])]
+      .filter(r => r.data_avaliacao)
+      .sort((a, b) => (b.data_avaliacao || '').localeCompare(a.data_avaliacao || ''));
+
     return NextResponse.json({
       total_linhas: data?.length || 0,
       avaliacao_por_mes: contar('data_avaliacao'),
       contrato_por_mes: contar('data_contrato'),
       pgto_por_mes: contar('data_pgto'),
-      // Amostra de datas brutas
-      amostra: (data || []).slice(0, 5).map(r => ({
+      amostras_mais_recentes: ordenadas.slice(0, 10).map(r => ({
         avaliacao: r.data_avaliacao,
         contrato: r.data_contrato,
         pgto: r.data_pgto,
