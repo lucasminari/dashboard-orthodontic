@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Skeleton } from '../components/Skeleton';
 
 type PacienteResultado = {
   chave: string;
@@ -80,7 +81,7 @@ export default function BuscarPage() {
   }, [q, buscar]);
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-10">
+    <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-5xl mx-auto">
         <header className="mb-6">
           <h1 className="text-3xl font-semibold tracking-tight">Buscar paciente</h1>
@@ -109,7 +110,11 @@ export default function BuscarPage() {
           </div>
         )}
 
-        {carregando && <div className="text-gray-400">Buscando...</div>}
+        {carregando && (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
+          </div>
+        )}
 
         {!carregando && resp && resp.resultados.length === 0 && (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">

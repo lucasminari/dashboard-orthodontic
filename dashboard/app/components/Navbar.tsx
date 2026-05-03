@@ -15,9 +15,13 @@ export default function Navbar() {
     return pathname.startsWith(path);
   };
 
-  // Em /import, /origem e /buscar, esconde os filtros (telas tem logica propria)
+  // Em telas com logica propria, esconde os filtros globais
   const mostraFiltros =
-    pronto && !pathname.startsWith('/import') && !pathname.startsWith('/origem') && !pathname.startsWith('/buscar');
+    pronto &&
+    !pathname.startsWith('/import') &&
+    !pathname.startsWith('/origem') &&
+    !pathname.startsWith('/buscar') &&
+    !pathname.startsWith('/metas');
   const semUnidade = pathname.startsWith('/comparativo');
 
   const linkClass = (path: string, ehInicio = false) =>
@@ -39,6 +43,7 @@ export default function Navbar() {
           <Link href="/funis-individuais" className={linkClass('/funis-individuais')}>Campanhas</Link>
           <Link href="/comparativo" className={linkClass('/comparativo')}>Comparativo</Link>
           <Link href="/import" className={linkClass('/import')}>Relatórios</Link>
+          <Link href="/metas" className={linkClass('/metas')}>Metas</Link>
           <Link href="/buscar" className={linkClass('/buscar')}>🔍 Buscar</Link>
         </div>
         {mostraFiltros && (

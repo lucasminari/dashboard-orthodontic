@@ -8,6 +8,7 @@ import { useFiltros, UNIDADES, PERIODOS } from './components/useFiltros';
 import { Skeleton, SkeletonCard } from './components/Skeleton';
 import { Tooltip } from './components/Tooltip';
 import { ExportarCSV } from './components/ExportarCSV';
+import { BarraMeta } from './components/BarraMeta';
 
 type TotalFunil = {
   cadastrados: number;
@@ -42,12 +43,15 @@ function buildParams(uId: number, desde?: string, ate?: string): string {
   return p.toString() ? `?${p.toString()}` : '';
 }
 
+type MapaMetas = Partial<Record<'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' | 'receita', number>>;
+
 export default function Home() {
   const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('mes');
   const [total, setTotal] = useState<TotalFunil | null>(null);
   const [totalAnt, setTotalAnt] = useState<TotalFunil | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
+  const [metas, setMetas] = useState<MapaMetas>({});
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
@@ -59,11 +63,18 @@ export default function Home() {
       ? buildParams(unidadeId, intervaloAnt.desde, intervaloAnt.ate)
       : null;
 
+    // Mes corrente do periodo selecionado (pra puxar metas) — usa data_inicio
+    const mesPeriodo = intervalo.desde ? intervalo.desde.slice(0, 7) : null;
+    const qMetas = mesPeriodo
+      ? `?unidade_id=${unidadeId}&mes=${mesPeriodo}`
+      : `?unidade_id=${unidadeId}`;
+
     try {
-      const [funilAtual, funilAnt, lembRes] = await Promise.all([
+      const [funilAtual, funilAnt, lembRes, metasRes] = await Promise.all([
         fetch(`/api/funil-completo${qAtual}`).then(res => res.json()),
         qAnt ? fetch(`/api/funil-completo${qAnt}`).then(res => res.json()) : Promise.resolve(null),
         fetch(`/api/lembretes${unidadeId ? `?unidade=${unidadeId}` : ''}`).then(res => res.json()),
+        fetch(`/api/metas${qMetas}`).then(res => res.json()).catch(() => ({ metas: [] })),
       ]);
       if (funilAtual.error) throw new Error(funilAtual.error);
       if (lembRes.erro) throw new Error(lembRes.erro);
@@ -71,6 +82,14 @@ export default function Home() {
       setTotalAnt(funilAnt && !funilAnt.error ? funilAnt.total : null);
       setFunilOrigens(funilAtual.funis);
       setLembretes(lembRes.lembretes);
+      // Monta mapa de metas (so usa se for periodo de 1 mes especifico)
+      const m: MapaMetas = {};
+      if (mesPeriodo && periodoId === 'mes') {
+        for (const meta of metasRes?.metas || []) {
+          m[meta.tipo as keyof MapaMetas] = Number(meta.valor) || 0;
+        }
+      }
+      setMetas(m);
     } catch (e: any) {
       setErro(e.message);
     } finally {
@@ -118,6 +137,7 @@ export default function Home() {
               label="Cadastrados"
               valor={total.cadastrados}
               valorAnterior={totalAnt?.cadastrados}
+              meta={metas.cadastrados}
               tooltip="Pacientes únicos cadastrados no período (Kommo + sistema Orthodontic, sem duplicar)."
               unidadeId={unidadeId}
               tipos={['leads', 'sistema']}
@@ -126,6 +146,7 @@ export default function Home() {
               label="Agendados"
               valor={total.agendados}
               valorAnterior={totalAnt?.agendados}
+              meta={metas.agendados}
               tooltip="Pacientes únicos com agendamento (data de avaliação preenchida) no sistema Orthodontic, ou com atendimento de telemarketing."
               unidadeId={unidadeId}
               tipos={['sistema', 'performance']}
@@ -134,6 +155,7 @@ export default function Home() {
               label="Compareceram"
               valor={total.compareceram}
               valorAnterior={totalAnt?.compareceram}
+              meta={metas.compareceram}
               tooltip="Pacientes únicos que efetivamente compareceram à avaliação no período."
               unidadeId={unidadeId}
               tipos={['performance', 'sistema']}
@@ -142,6 +164,7 @@ export default function Home() {
               label="Fecharam"
               valor={total.fecharam}
               valorAnterior={totalAnt?.fecharam}
+              meta={metas.fecharam}
               tooltip="Pacientes que assinaram contrato no período (data de contrato preenchida)."
               unidadeId={unidadeId}
               tipos={['sistema']}
@@ -150,6 +173,7 @@ export default function Home() {
               label="Receita"
               valor={total.receita}
               valorAnterior={totalAnt?.receita}
+              meta={metas.receita}
               tooltip="Soma de vlr_contrato dos pacientes com pagamento confirmado (data_pgto) no período."
               moeda
               unidadeId={unidadeId}
@@ -192,6 +216,7 @@ function Card({
   label,
   valor,
   valorAnterior,
+  meta,
   tooltip,
   moeda = false,
   unidadeId,
@@ -200,6 +225,7 @@ function Card({
   label: string;
   valor: number;
   valorAnterior?: number;
+  meta?: number;
   tooltip?: string;
   moeda?: boolean;
   unidadeId?: number;
@@ -239,6 +265,9 @@ function Card({
             </>
           )}
         </div>
+      )}
+      {meta !== undefined && meta > 0 && (
+        <BarraMeta realizado={valor} meta={meta} ehMoeda={moeda} />
       )}
       {tipos && (
         <div className="mt-2 pt-2 border-t border-gray-800">

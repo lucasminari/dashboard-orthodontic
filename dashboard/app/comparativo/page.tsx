@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { AtualizadoEm } from '../components/AtualizadoEm';
 import { useFiltros, PERIODOS } from '../components/useFiltros';
 import { ExportarCSV } from '../components/ExportarCSV';
+import { Skeleton } from '../components/Skeleton';
 
 type FunilOrigem = {
   origem: string;
@@ -91,7 +92,7 @@ export default function ComparativoPage() {
   }, [periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-10">
+    <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
         <header className="mb-6">
           <h1 className="text-3xl font-semibold tracking-tight">Comparativo entre unidades</h1>
@@ -103,7 +104,14 @@ export default function ComparativoPage() {
           </div>
         </header>
 
-        {carregando && <div className="text-gray-400">Carregando...</div>}
+        {carregando && (
+          <div className="space-y-6">
+            <Skeleton className="h-72" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64" />)}
+            </div>
+          </div>
+        )}
         {erro && (
           <div className="bg-red-950/40 border border-red-700/60 text-red-200 rounded-lg p-4 mb-6">
             {erro}

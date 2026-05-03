@@ -133,7 +133,7 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
   }, [unidadeId, periodoId, carregar]);
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-10">
+    <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
         <header className="mb-6">
           <Link href="/funil" className="text-xs text-gray-500 hover:text-gray-300 mb-2 inline-block">

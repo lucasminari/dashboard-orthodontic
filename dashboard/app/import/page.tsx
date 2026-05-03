@@ -117,7 +117,7 @@ export default function ImportPage() {
   const unidadesVisiveis = dados ?? [];
 
   return (
-    <main className="min-h-screen bg-black text-white p-6 md:p-10">
+    <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-5xl mx-auto">
         <header className="mb-10">
           <div className="flex items-baseline justify-between flex-wrap gap-2">
