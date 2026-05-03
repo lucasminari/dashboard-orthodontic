@@ -40,8 +40,8 @@ function chave(r: any): string {
 function origemDaLinha(r: any): string {
   let origem = mapearOrigem(r.origem);
   if (origem === ROTULO_SEM_ORIGEM) {
-    const fallback = mapearOrigem(r.telemarketing);
-    if (fallback !== ROTULO_SEM_ORIGEM) origem = fallback;
+    const fb = mapearOrigem(r.telemarketing);
+    if (fb !== ROTULO_SEM_ORIGEM) origem = fb;
   }
   return origem;
 }
@@ -59,16 +59,39 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
-    // ── raw_performance: fonte unica ──────────────────────────────────────
+    // ── raw_campanhas: TOTAIS oficiais por origem (snapshot mais recente) ──
+    const campanhasRows = await buscarTudo('raw_campanhas', q => {
+      let qq = q.select(
+        'origem, campanha, acao, agendados, compareceram, contratos_pagos, data_relatorio, unidade_id, ingestao_id',
+      );
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      if (dataInicio) qq = qq.gte('data_relatorio', dataInicio);
+      if (dataFim) qq = qq.lte('data_relatorio', dataFim);
+      return qq;
+    });
+
+    // Pega so a ingestao mais recente por unidade (snapshot acumulado)
+    const ingMaisRecPorUnidade = new Map<number, number>();
+    for (const r of campanhasRows || []) {
+      const uid = r.unidade_id as number;
+      const atual = ingMaisRecPorUnidade.get(uid);
+      if (atual === undefined || (r.ingestao_id as number) > atual) {
+        ingMaisRecPorUnidade.set(uid, r.ingestao_id as number);
+      }
+    }
+    const campanhasValidas = (campanhasRows || []).filter(
+      r => ingMaisRecPorUnidade.get(r.unidade_id as number) === r.ingestao_id,
+    );
+
+    // ── raw_performance: detalhe + receita ────────────────────────────────
     const perfRows = await buscarTudo('raw_performance', q => {
       let qq = q.select(
-        'origem, compareceu, pagou, valor, status, telefone_norm, paciente_nome, telemarketing, data, unidade_id, campanha, acao',
+        'origem, telemarketing, status, compareceu, pagou, valor, telefone_norm, paciente_nome, data, unidade_id, campanha, acao',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
       return qq;
     });
 
-    // ── Filtros utilitarios ───────────────────────────────────────────────
     const noPeriodo = (data: string | null | undefined): boolean => {
       if (!data) return false;
       const d = data.slice(0, 10);
@@ -78,27 +101,32 @@ export async function GET(request: NextRequest) {
     };
     const semFiltro = !dataInicio && !dataFim;
 
-    const origemBate = (r: any) => origemDaLinha(r) === origemAlvo;
+    // ── KPIs: totais vem do CampanhasReport, receita do Performance ──────
+    let agendados = 0;
+    let compareceram = 0;
+    let pagaram = 0;
+    for (const r of campanhasValidas) {
+      const o = mapearOrigem(r.origem);
+      if (o !== origemAlvo) continue;
+      agendados += Number(r.agendados) || 0;
+      compareceram += Number(r.compareceram) || 0;
+      pagaram += Number(r.contratos_pagos) || 0;
+    }
 
-    // ── KPIs (totais) ─────────────────────────────────────────────────────
-    const agendados = new Set<string>();
-    const compareceram = new Set<string>();
-    const pagaram = new Set<string>();
     let receita = 0;
-
+    const pagosKeys = new Set<string>();
     for (const r of perfRows || []) {
-      if (!origemBate(r)) continue;
+      if (origemDaLinha(r) !== origemAlvo) continue;
       if (!semFiltro && !noPeriodo(r.data)) continue;
+      if (!r.pagou) continue;
       const k = chave(r);
-      agendados.add(k);
-      if (r.compareceu) compareceram.add(k);
-      if (r.pagou) {
-        if (!pagaram.has(k)) receita += Number(r.valor) || 0;
-        pagaram.add(k);
+      if (!pagosKeys.has(k)) {
+        receita += Number(r.valor) || 0;
+        pagosKeys.add(k);
       }
     }
 
-    // ── Top telemarketers, situacoes, sub-campanhas, acoes ────────────────
+    // ── Top telemarketers, situacoes, sub-campanhas (do Performance) ──────
     const acumular = (
       mapa: Map<string, { total: number; receita: number }>,
       chaveAgg: string | null | undefined,
@@ -116,16 +144,14 @@ export async function GET(request: NextRequest) {
     const telemarketers = new Map<string, { total: number; receita: number }>();
     const situacoes = new Map<string, { total: number; receita: number }>();
     const subCampanhas = new Map<string, { total: number; receita: number }>();
-    const acoes = new Map<string, { total: number; receita: number }>();
 
     for (const r of perfRows || []) {
-      if (!origemBate(r)) continue;
+      if (origemDaLinha(r) !== origemAlvo) continue;
       if (!semFiltro && !noPeriodo(r.data)) continue;
       const valor = Number(r.valor) || 0;
       acumular(telemarketers, r.telemarketing, valor, !!r.pagou);
       acumular(situacoes, r.status, 0, false);
       acumular(subCampanhas, r.campanha, valor, !!r.pagou);
-      acumular(acoes, r.acao, valor, !!r.pagou);
     }
 
     const top = (mapa: Map<string, { total: number; receita: number }>, n = 10): ItemRanking[] =>
@@ -134,7 +160,7 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.total - a.total)
         .slice(0, n);
 
-    // ── Evolucao mes a mes (6 meses) ──────────────────────────────────────
+    // ── Evolucao mes a mes (6 meses) — vem do Performance (tem data) ─────
     const hoje = new Date();
     const meses: string[] = [];
     for (let i = 5; i >= 0; i--) {
@@ -143,12 +169,7 @@ export async function GET(request: NextRequest) {
     }
     const mapEvolucao = new Map<
       string,
-      {
-        agendados: Set<string>;
-        compareceram: Set<string>;
-        pagaram: Set<string>;
-        receita: number;
-      }
+      { agendados: Set<string>; compareceram: Set<string>; pagaram: Set<string>; receita: number }
     >();
     for (const m of meses) {
       mapEvolucao.set(m, {
@@ -161,16 +182,16 @@ export async function GET(request: NextRequest) {
     const peg = (m: string | null | undefined) => (m ? m.slice(0, 7) : null);
 
     for (const r of perfRows || []) {
-      if (!origemBate(r)) continue;
+      if (origemDaLinha(r) !== origemAlvo) continue;
       const m = peg(r.data);
       if (!m || !mapEvolucao.has(m)) continue;
-      const acc = mapEvolucao.get(m)!;
+      const e = mapEvolucao.get(m)!;
       const k = chave(r);
-      acc.agendados.add(k);
-      if (r.compareceu) acc.compareceram.add(k);
+      e.agendados.add(k);
+      if (r.compareceu) e.compareceram.add(k);
       if (r.pagou) {
-        if (!acc.pagaram.has(k)) acc.receita += Number(r.valor) || 0;
-        acc.pagaram.add(k);
+        if (!e.pagaram.has(k)) e.receita += Number(r.valor) || 0;
+        e.pagaram.add(k);
       }
     }
 
@@ -187,47 +208,50 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Comparacao com media geral ────────────────────────────────────────
-    const totalAgendados = new Set<string>();
-    const totalCompareceram = new Set<string>();
-    const totalPagaram = new Set<string>();
+    let totalAgendados = 0;
+    let totalCompareceram = 0;
+    let totalPagaram = 0;
+    for (const r of campanhasValidas) {
+      totalAgendados += Number(r.agendados) || 0;
+      totalCompareceram += Number(r.compareceram) || 0;
+      totalPagaram += Number(r.contratos_pagos) || 0;
+    }
     let receitaGeral = 0;
-
+    const pagosGlobalKeys = new Set<string>();
     for (const r of perfRows || []) {
+      if (!r.pagou) continue;
       if (!semFiltro && !noPeriodo(r.data)) continue;
       const k = chave(r);
-      totalAgendados.add(k);
-      if (r.compareceu) totalCompareceram.add(k);
-      if (r.pagou) {
-        if (!totalPagaram.has(k)) receitaGeral += Number(r.valor) || 0;
-        totalPagaram.add(k);
+      if (!pagosGlobalKeys.has(k)) {
+        receitaGeral += Number(r.valor) || 0;
+        pagosGlobalKeys.add(k);
       }
     }
 
-    const ticketMedio = pagaram.size > 0 ? receita / pagaram.size : 0;
-    const ticketMedioGeral = totalPagaram.size > 0 ? receitaGeral / totalPagaram.size : 0;
+    const ticketMedio = pagaram > 0 ? receita / pagaram : 0;
+    const ticketMedioGeral = totalPagaram > 0 ? receitaGeral / totalPagaram : 0;
 
     return NextResponse.json({
       origem: origemAlvo,
       filtro: { unidade_id: unidadeId, data_inicio: dataInicio, data_fim: dataFim },
       kpis: {
-        agendados: agendados.size,
-        compareceram: compareceram.size,
-        pagaram: pagaram.size,
+        agendados,
+        compareceram,
+        pagaram,
         receita,
         ticket_medio: ticketMedio,
       },
       taxas: {
-        agend_comp: ratio(compareceram.size, agendados.size),
-        comp_pag: ratio(pagaram.size, compareceram.size),
+        agend_comp: ratio(compareceram, agendados),
+        comp_pag: ratio(pagaram, compareceram),
       },
       media_geral: {
         ticket_medio: ticketMedioGeral,
-        agend_comp: ratio(totalCompareceram.size, totalAgendados.size),
-        comp_pag: ratio(totalPagaram.size, totalCompareceram.size),
+        agend_comp: ratio(totalCompareceram, totalAgendados),
+        comp_pag: ratio(totalPagaram, totalCompareceram),
       },
       evolucao,
       top: {
-        // Nomes mantidos pra compat com a UI
         dentistas: [],
         atendentes: top(telemarketers),
         telemarketers: top(telemarketers),

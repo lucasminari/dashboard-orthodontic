@@ -7,6 +7,8 @@ const TIPOS_LABEL: Record<string, string> = {
   leads: 'Leads',
   sistema: 'Sistema (contratos)',
   performance: 'Performance',
+  campanhas: 'Campanhas',
+  outros_colaboradores: 'Outros Colaboradores',
 };
 
 const UNIDADE_SLUG: Record<string, number> = {
@@ -46,6 +48,8 @@ const TIPO_COR: Record<string, string> = {
   leads: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
   sistema: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
   performance: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  campanhas: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+  outros_colaboradores: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
 };
 
 function formatDataHora(d: string | null): string {

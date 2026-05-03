@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       sistema: null,
       performance: null,
       campanhas: null,
+      outros_colaboradores: null,
     };
 
     if (unidadeId) {

@@ -19,7 +19,7 @@ interface EtapasFunil {
 interface FunilOrigem extends EtapasFunil {
   origem: string;
   fonte: 'kommo' | 'sistema';
-  // Campos legados (mantidos pra compat) — fecharam == pagaram, cadastrados == agendados
+  // Campos legados
   fecharam: number;
   cadastrados: number;
   taxa_cadastro_para_agendamento: number | null;
@@ -27,28 +27,6 @@ interface FunilOrigem extends EtapasFunil {
   taxa_comparecimento_para_fechamento: number | null;
   taxa_comparecimento_para_pagamento: number | null;
   taxa_fechamento_para_pagamento: number | null;
-}
-
-interface AcumuladorOrigem {
-  agendados: Set<string>;
-  compareceram: Set<string>;
-  pagaram: Set<string>;
-  receita: number;
-}
-
-function novoAcumulador(): AcumuladorOrigem {
-  return {
-    agendados: new Set(),
-    compareceram: new Set(),
-    pagaram: new Set(),
-    receita: 0,
-  };
-}
-
-function chavePaciente(r: any): string {
-  return r.telefone_norm
-    ? `tel:${r.telefone_norm}`
-    : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
 }
 
 function ratio(num: number, den: number): number | null {
@@ -64,12 +42,38 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
-    // ── raw_performance: fonte unica da verdade ──────────────────────────
-    // Performance traz: data, status, compareceu, pagou, valor, origem,
-    // telemarketing. Tudo que precisamos pro funil + receita.
+    // ── raw_campanhas: TOTAIS oficiais por (campanha+acao+origem) ─────────
+    // Cada upload eh um snapshot dos totais — pegamos a INGESTAO mais recente
+    // que cobre o periodo solicitado (data_relatorio dentro do periodo).
+    const campanhasRows = await buscarTudo('raw_campanhas', q => {
+      let qq = q.select(
+        'origem, campanha, acao, total_leads, agendados, compareceram, contratos_fechados, contratos_pagos, data_relatorio, unidade_id, ingestao_id',
+      );
+      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
+      if (dataInicio) qq = qq.gte('data_relatorio', dataInicio);
+      if (dataFim) qq = qq.lte('data_relatorio', dataFim);
+      return qq;
+    });
+
+    // Por (unidade_id), pega a ingestao com data_relatorio MAIS RECENTE.
+    // Cada upload eh um SNAPSHOT acumulado, entao usamos so a ingestao
+    // mais recente (nao somamos varias ingestoes pra evitar dupla contagem).
+    const ingestaoMaisRecentePorUnidade = new Map<number, number>();
+    for (const r of campanhasRows || []) {
+      const uid = r.unidade_id as number;
+      const atual = ingestaoMaisRecentePorUnidade.get(uid);
+      if (atual === undefined || (r.ingestao_id as number) > atual) {
+        ingestaoMaisRecentePorUnidade.set(uid, r.ingestao_id as number);
+      }
+    }
+    const linhasValidas = (campanhasRows || []).filter(
+      r => ingestaoMaisRecentePorUnidade.get(r.unidade_id as number) === r.ingestao_id,
+    );
+
+    // ── raw_performance: RECEITA por origem (Performance tem valor R$) ────
     const perfRows = await buscarTudo('raw_performance', q => {
       let qq = q.select(
-        'origem, compareceu, pagou, valor, telefone_norm, paciente_nome, data, unidade_id, telemarketing',
+        'origem, telemarketing, pagou, valor, data, unidade_id',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
       if (dataInicio) qq = qq.gte('data', dataInicio);
@@ -78,59 +82,59 @@ export async function GET(request: NextRequest) {
     });
 
     // ── Acumulador por origem normalizada ─────────────────────────────────
-    const acc: Map<string, AcumuladorOrigem> = new Map();
-    function get(origem: string): AcumuladorOrigem {
-      if (!acc.has(origem)) acc.set(origem, novoAcumulador());
+    interface Acc {
+      agendados: number;
+      compareceram: number;
+      pagaram: number;
+      receita: number;
+    }
+    const acc = new Map<string, Acc>();
+    function get(origem: string): Acc {
+      if (!acc.has(origem)) {
+        acc.set(origem, { agendados: 0, compareceram: 0, pagaram: 0, receita: 0 });
+      }
       return acc.get(origem)!;
     }
-    // Garante visibilidade das 5 origens Kommo mesmo sem dados
+    // Garante visibilidade das origens Kommo mesmo zeradas
     for (const c of ORIGENS_KOMMO_CANONICAS) get(c);
 
-    // Cada linha do Performance = 1 atendimento de telemarketing.
-    // Deduplica por telefone (mesmo paciente pode ter varios atendimentos).
+    // Soma totais do CampanhasReport (verdade)
+    for (const r of linhasValidas) {
+      const origem = mapearOrigem(r.origem);
+      const a = get(origem);
+      a.agendados += Number(r.agendados) || 0;
+      a.compareceram += Number(r.compareceram) || 0;
+      a.pagaram += Number(r.contratos_pagos) || 0;
+    }
+
+    // Soma receita do Performance (com mesmo fallback origem -> telemarketing)
     for (const r of perfRows || []) {
-      // Origem: prefere o campo origem; se vier vazio/desconhecido, tenta o
-      // telemarketing (UPDONTIC etc. aparece como telemarketer).
+      if (!r.pagou) continue;
       let origem = mapearOrigem(r.origem);
       if (origem === ROTULO_SEM_ORIGEM) {
-        const fallback = mapearOrigem(r.telemarketing);
-        if (fallback !== ROTULO_SEM_ORIGEM) origem = fallback;
+        const fb = mapearOrigem(r.telemarketing);
+        if (fb !== ROTULO_SEM_ORIGEM) origem = fb;
       }
       const a = get(origem);
-      const k = chavePaciente(r);
-
-      // Toda linha conta como agendamento (paciente foi pra agenda)
-      a.agendados.add(k);
-
-      if (r.compareceu) a.compareceram.add(k);
-
-      if (r.pagou) {
-        if (!a.pagaram.has(k)) {
-          a.receita += Number(r.valor) || 0;
-        }
-        a.pagaram.add(k);
-      }
+      a.receita += Number(r.valor) || 0;
     }
 
     // ── Monta lista final ─────────────────────────────────────────────────
     const funis: FunilOrigem[] = [];
     for (const [origem, a] of acc.entries()) {
-      const agendados = a.agendados.size;
-      const compareceram = a.compareceram.size;
-      const pagaram = a.pagaram.size;
       funis.push({
         origem,
         fonte: isOrigemKommo(origem) ? 'kommo' : 'sistema',
-        cadastrados: agendados, // legado
-        fecharam: pagaram, // legado
-        agendados,
-        compareceram,
-        pagaram,
+        cadastrados: a.agendados, // legado
+        fecharam: a.pagaram, // legado
+        agendados: a.agendados,
+        compareceram: a.compareceram,
+        pagaram: a.pagaram,
         receita: a.receita,
         taxa_cadastro_para_agendamento: null,
-        taxa_agendamento_para_comparecimento: ratio(compareceram, agendados),
-        taxa_comparecimento_para_fechamento: ratio(pagaram, compareceram),
-        taxa_comparecimento_para_pagamento: ratio(pagaram, compareceram),
+        taxa_agendamento_para_comparecimento: ratio(a.compareceram, a.agendados),
+        taxa_comparecimento_para_fechamento: ratio(a.pagaram, a.compareceram),
+        taxa_comparecimento_para_pagamento: ratio(a.pagaram, a.compareceram),
         taxa_fechamento_para_pagamento: null,
       });
     }
@@ -158,8 +162,8 @@ export async function GET(request: NextRequest) {
     );
     const total = {
       ...totalEt,
-      cadastrados: totalEt.agendados, // legado
-      fecharam: totalEt.pagaram, // legado
+      cadastrados: totalEt.agendados,
+      fecharam: totalEt.pagaram,
     };
 
     return NextResponse.json({
@@ -167,7 +171,8 @@ export async function GET(request: NextRequest) {
       funis,
       total,
       contagem: {
-        performance: perfRows?.length || 0,
+        campanhas_linhas: linhasValidas.length,
+        performance_linhas: perfRows?.length || 0,
       },
     });
   } catch (e) {

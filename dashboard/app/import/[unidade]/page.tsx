@@ -8,6 +8,8 @@ const TIPOS_LABEL: Record<string, string> = {
   leads: 'Leads',
   sistema: 'Sistema (contratos)',
   performance: 'Performance',
+  campanhas: 'Campanhas',
+  outros_colaboradores: 'Outros Colaboradores',
 };
 
 const UNIDADE_MAP: Record<string, { id: number; nome: string }> = {
@@ -46,6 +48,8 @@ const TIPO_COR: Record<string, string> = {
   leads: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
   sistema: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
   performance: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
+  campanhas: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
+  outros_colaboradores: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
 };
 
 function formatDataHora(d: string | null): string {
@@ -97,6 +101,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
     leads: null,
     sistema: null,
     performance: null,
+    campanhas: null,
+    outros_colaboradores: null,
   });
   const [enviando, setEnviando] = useState(false);
   const [erroUpload, setErroUpload] = useState<string | null>(null);
@@ -204,8 +210,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const enviarArquivos = async () => {
     if (!unidadeId) return;
-    // Performance eh a unica fonte. Sistema e Leads sao opcionais (compat).
-    const obrigatorios = ['performance'];
+    // Campanhas + Performance obrigatorios. OutrosColaboradores opcional.
+    const obrigatorios = ['campanhas', 'performance'];
     const faltando = obrigatorios.filter(t => !arquivos[t]);
     if (faltando.length > 0) {
       setErroUpload(`Faltam arquivos: ${faltando.join(', ')}`);
@@ -235,7 +241,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
       if (res.status === 200 && data.success === true) {
         // Sucesso real do servidor
         setSucessoUpload(true);
-        setArquivos({ leads: null, sistema: null, performance: null });
+        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null, outros_colaboradores: null });
         setTimeout(() => {
           carregar();
           setSucessoUpload(false);
@@ -244,7 +250,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
       } else if (res.status === 202 && data.queued === true) {
         // Enfileirado pelo Service Worker (offline)
         setErroUpload('⏳ Sem conexão. Arquivos salvos localmente — vão ser enviados quando voltar online.');
-        setArquivos({ leads: null, sistema: null, performance: null });
+        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null, outros_colaboradores: null });
         setEnviando(false);
       } else {
         // Erro real do servidor
@@ -259,13 +265,23 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const processarArquivos = (files: FileList) => {
     const novoEstado = { ...arquivos };
-    const tipos = ['leads', 'sistema', 'performance'];
+    // Ordem importa: 'outroscolab' precisa ser checado antes de 'colab' generico
+    const detectores: { padrao: string; tipo: string }[] = [
+      { padrao: 'outroscolab', tipo: 'outros_colaboradores' },
+      { padrao: 'outros_colab', tipo: 'outros_colaboradores' },
+      { padrao: 'outros colab', tipo: 'outros_colaboradores' },
+      { padrao: 'campanha', tipo: 'campanhas' },
+      { padrao: 'leads', tipo: 'leads' },
+      { padrao: 'sistema', tipo: 'sistema' },
+      { padrao: 'contrato', tipo: 'sistema' },
+      { padrao: 'performance', tipo: 'performance' },
+    ];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const nome = file.name.toLowerCase();
-      for (const tipo of tipos) {
-        if (nome.includes(tipo)) {
-          novoEstado[tipo] = file;
+      for (const d of detectores) {
+        if (nome.includes(d.padrao)) {
+          novoEstado[d.tipo] = file;
           break;
         }
       }
@@ -400,7 +416,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <div className="space-y-2">
                 <div className="text-sm font-medium text-gray-300 mb-3">Arquivos selecionados:</div>
-                {['performance'].map(tipo => (
+                {['campanhas', 'performance', 'outros_colaboradores'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-2 text-sm">
                     <div className={`w-4 h-4 rounded border ${arquivos[tipo] ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}>
                       {arquivos[tipo] && <div className="text-white text-xs flex items-center justify-center h-full">✓</div>}
@@ -429,7 +445,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <button
                 onClick={enviarArquivos}
-                disabled={enviando || !arquivos.performance}
+                disabled={enviando || !arquivos.performance || !arquivos.campanhas}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg transition"
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
@@ -577,9 +593,27 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               </div>
 
               <div className="space-y-4 text-sm">
+                <div className="border-l-2 border-emerald-500 pl-4 py-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold text-emerald-100">1️⃣ Campanhas (totais oficiais) <span className="text-red-400 text-[10px] ml-1">obrigatório</span></div>
+                    <a
+                      href="https://franquias.orthodonticbrasil.com/comercial_relatorio_campanha"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded text-white font-medium transition"
+                    >
+                      Abrir Relatório →
+                    </a>
+                  </div>
+                  <div className="text-gray-400 text-xs space-y-1 mb-2">
+                    <p><strong>Filtro:</strong> Período = mês corrente até hoje</p>
+                    <p><strong>Arquivo:</strong> Exportar → baixe (nome contém "Campanhas")</p>
+                  </div>
+                </div>
+
                 <div className="border-l-2 border-purple-500 pl-4 py-2">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-purple-100">📊 Performance (única fonte)</div>
+                    <div className="font-semibold text-purple-100">2️⃣ Performance (detalhes + valor R$) <span className="text-red-400 text-[10px] ml-1">obrigatório</span></div>
                     <a
                       href="https://franquias.orthodonticbrasil.com/comercial_relatorio_performance"
                       target="_blank"
@@ -591,17 +625,28 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p><strong>Filtro:</strong> Base da Data = Data do Agendamento, Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> clique em Exportar → baixe diretamente (sem renomear)</p>
+                    <p><strong>Arquivo:</strong> Exportar → baixe diretamente</p>
                     <p className="text-amber-300">⚠️ Este arquivo é CSV (não Excel)</p>
+                  </div>
+                </div>
+
+                <div className="border-l-2 border-cyan-500 pl-4 py-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-semibold text-cyan-100">3️⃣ Outros Colaboradores <span className="text-gray-500 text-[10px] ml-1">opcional</span></div>
+                  </div>
+                  <div className="text-gray-400 text-xs space-y-1 mb-2">
+                    <p>Mostra agendamentos feitos pela <strong>Recepção</strong> e outros colaboradores fora do telemarketing oficial.</p>
+                    <p><strong>Arquivo:</strong> precisa conter "OutrosColaboradores" no nome</p>
                   </div>
                 </div>
               </div>
 
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-2"><strong>Após exportar:</strong></p>
+                <p className="text-xs text-gray-400 mb-2"><strong>Como funciona:</strong></p>
                 <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-                  <li>Use a seção <strong>Upload de Arquivos</strong> acima pra enviar o Performance</li>
-                  <li>Dados processados automaticamente e dashboard atualiza em segundos</li>
+                  <li><strong>Campanhas</strong> dá os totais oficiais por origem (verdade)</li>
+                  <li><strong>Performance</strong> complementa com receita R$ e detalhamento por paciente</li>
+                  <li><strong>Outros Colaboradores</strong> mostra quem mais agendou (controle interno)</li>
                 </ol>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import { tentarOrigemPorPromotor } from './origem-mapeamento';
+import { tentarOrigemPorPromotor, corrigirMojibake } from './origem-mapeamento';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
@@ -387,6 +387,86 @@ async function processarPerformance(
   return registros.length;
 }
 
+// ==================== CAMPANHAS REPORT ====================
+// Relatorio agregado oficial: por (Campanha + Acao + Origem) traz totais
+// de Leads, Interacoes, Agendados, Compareceram, Contratos Fechados e Pagos.
+// Eh a FONTE OFICIAL dos numeros agregados (Performance perde walk-ins/recepcao).
+async function processarCampanhas(
+  file: File,
+  dataRelatorio: string,
+  unidadeId: number,
+): Promise<number> {
+  const linhas = await lerXLSX(file, 1); // pula primeira linha (titulo mesclado)
+  await apagarIngestoesAnteriores(unidadeId, 'campanhas', dataRelatorio);
+  const ingestaoId = await criarIngestao(unidadeId, 'campanhas', dataRelatorio, file.name);
+
+  const registros = linhas
+    .filter(l => l && (l['Campanha'] || l['Origem'] || l['Total Leads']))
+    .map(l => ({
+      unidade_id: unidadeId,
+      data_relatorio: dataRelatorio,
+      campanha: corrigirMojibake(String(l['Campanha'] || '')) || null,
+      acao: corrigirMojibake(String(l['Ação'] || '')) || null,
+      origem: corrigirMojibake(String(l['Origem'] || '')) || null,
+      total_leads: num(l['Total Leads']),
+      interacoes: num(l['Interações']),
+      agendados: num(l['Agendados']),
+      compareceram: num(l['Compareceram']),
+      contratos_fechados: num(l['Contratos Fechados']),
+      contratos_pagos: num(l['Contratos Pagos']),
+      ingestao_id: ingestaoId,
+    }));
+
+  if (registros.length > 0) {
+    await inserirEmLotes('raw_campanhas', registros);
+  }
+  await finalizarIngestao(ingestaoId, registros.length);
+  return registros.length;
+}
+
+// ==================== OUTROS COLABORADORES ====================
+// Relatorio agregado de agendamentos feitos por OUTROS colaboradores
+// (Recepcao, Supervisores, Sistema). Total agregado por colaborador, sem
+// origem nem data por linha. Usado pra controle interno.
+async function processarOutrosColaboradores(
+  file: File,
+  dataRelatorio: string,
+  unidadeId: number,
+): Promise<number> {
+  const linhas = await lerXLSX(file, 1);
+  await apagarIngestoesAnteriores(unidadeId, 'outros_colaboradores', dataRelatorio);
+  const ingestaoId = await criarIngestao(
+    unidadeId,
+    'outros_colaboradores',
+    dataRelatorio,
+    file.name,
+  );
+
+  const registros = linhas
+    .filter(l => l && l['Colaborador'])
+    .map(l => ({
+      unidade_id: unidadeId,
+      data_relatorio: dataRelatorio,
+      colaborador: String(l['Colaborador'] || '').trim() || null,
+      cargo: String(l['Cargo'] || '').trim() || null,
+      agendamentos: num(l['Agendamentos']),
+      comparecimentos: num(l['Comparecimentos']),
+      ingestao_id: ingestaoId,
+    }));
+
+  if (registros.length > 0) {
+    try {
+      await inserirEmLotes('raw_outros_colaboradores', registros);
+    } catch (e) {
+      // Tabela ainda nao existe no banco — log e ignora pra nao quebrar
+      // o upload dos outros arquivos. Usuario precisa criar a tabela.
+      console.warn('[parser] raw_outros_colaboradores nao existe — pulando insert. Erro:', e);
+    }
+  }
+  await finalizarIngestao(ingestaoId, registros.length);
+  return registros.length;
+}
+
 // ==================== MAIN ====================
 export async function processarArquivos(
   files: Record<string, File>,
@@ -410,6 +490,20 @@ export async function processarArquivos(
       console.log('[parser] Processando performance:', files.performance.name);
       processed.performance = await processarPerformance(files.performance, dataRelatorio, unidadeId);
       console.log(`[parser] Performance: ${processed.performance} linhas`);
+    }
+    if (files.campanhas) {
+      console.log('[parser] Processando campanhas:', files.campanhas.name);
+      processed.campanhas = await processarCampanhas(files.campanhas, dataRelatorio, unidadeId);
+      console.log(`[parser] Campanhas: ${processed.campanhas} linhas`);
+    }
+    if (files.outros_colaboradores) {
+      console.log('[parser] Processando outros_colaboradores:', files.outros_colaboradores.name);
+      processed.outros_colaboradores = await processarOutrosColaboradores(
+        files.outros_colaboradores,
+        dataRelatorio,
+        unidadeId,
+      );
+      console.log(`[parser] OutrosColaboradores: ${processed.outros_colaboradores} linhas`);
     }
 
     return { success: true, processed };

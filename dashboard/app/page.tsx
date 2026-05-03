@@ -104,7 +104,7 @@ export default function Home() {
           <p className="text-gray-400">OrthoDontic — {unidadeAtual} · {periodoAtual}</p>
           <div className="mt-2">
             <AtualizadoEm
-              tipos={['performance']}
+              tipos={['campanhas', 'performance']}
               unidadeId={unidadeId || undefined}
             />
           </div>
@@ -128,7 +128,7 @@ export default function Home() {
               meta={metas.agendados}
               tooltip="Pacientes únicos com agendamento (data de avaliação preenchida) no sistema Orthodontic, ou com atendimento de telemarketing."
               unidadeId={unidadeId}
-              tipos={['performance']}
+              tipos={['campanhas', 'performance']}
             />
             <Card
               label="Compareceram"
@@ -201,7 +201,7 @@ function Card({
   tooltip?: string;
   moeda?: boolean;
   unidadeId?: number;
-  tipos?: ('leads' | 'sistema' | 'performance')[];
+  tipos?: ('leads' | 'sistema' | 'performance' | 'campanhas' | 'outros_colaboradores')[];
 }) {
   const fmt = (n: number) =>
     moeda
@@ -264,7 +264,7 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
           Funil de conversão
           <Tooltip texto="Cada etapa conta pacientes únicos. Taxa = % que avançou da etapa anterior. Cadastrados pode incluir leads que ainda estão em etapas iniciais." />
         </h2>
-        <AtualizadoEm tipos={['performance']} unidadeId={unidadeId || undefined} />
+        <AtualizadoEm tipos={['campanhas', 'performance']} unidadeId={unidadeId || undefined} />
       </div>
       <div className="space-y-3">
         {etapas.map((e, i) => {

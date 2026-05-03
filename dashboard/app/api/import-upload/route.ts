@@ -3,23 +3,30 @@ import { processarArquivos } from '@/lib/parsers';
 
 export const dynamic = 'force-dynamic';
 
-// 'performance' eh a unica fonte de dados analiticos — tem agendado,
-// compareceu, fechou, pagou, valor, origem, telemarketing tudo num arquivo.
-// 'sistema' e 'leads' sao aceitos pra compat retroativa mas nao sao mais
-// consultados pelas APIs.
-const TIPOS_OBRIGATORIOS = ['performance'];
-const TIPOS_ACEITOS = ['leads', 'sistema', 'performance'];
+// Arquivos analiticos:
+// - 'campanhas' (CampanhasReport.xlsx): TOTAIS oficiais por origem (verdade)
+// - 'performance' (CSV): detalhe + receita R$ + telemarketers
+// - 'outros_colaboradores' (xlsx): controle interno (opcional)
+// - 'sistema' e 'leads' aceitos pra compat retroativa, nao sao mais usados
+const TIPOS_OBRIGATORIOS = ['campanhas', 'performance'];
+const TIPOS_ACEITOS = ['leads', 'sistema', 'performance', 'campanhas', 'outros_colaboradores'];
 const EXTENSOES_VALIDAS: Record<string, string[]> = {
   leads: ['xlsx'],
   sistema: ['xlsx'],
   performance: ['csv', 'xlsx'],
+  campanhas: ['xlsx'],
+  outros_colaboradores: ['xlsx'],
 };
 
 function extrairTipo(filename: string): string | null {
   const lower = filename.toLowerCase();
+  if (lower.includes('outroscolab') || lower.includes('outros_colab') || lower.includes('outros colab')) {
+    return 'outros_colaboradores';
+  }
   if (lower.includes('leads')) return 'leads';
   if (lower.includes('sistema') || lower.includes('contrato')) return 'sistema';
   if (lower.includes('performance')) return 'performance';
+  if (lower.includes('campanha') || lower.includes('campaign')) return 'campanhas';
   return null;
 }
 
@@ -57,14 +64,14 @@ export async function POST(request: NextRequest) {
 
         if (!tipo) {
           return NextResponse.json(
-            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'sistema' ou 'performance' no nome.` },
+            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Use nomes contendo 'performance', 'campanhas' ou 'outros_colaboradores'.` },
             { status: 400 },
           );
         }
 
         if (!TIPOS_ACEITOS.includes(tipo)) {
           return NextResponse.json(
-            { error: `Tipo inválido: ${tipo}. Esperado: sistema ou performance` },
+            { error: `Tipo inválido: ${tipo}. Esperado: performance, campanhas ou outros_colaboradores` },
             { status: 400 },
           );
         }
@@ -98,6 +105,8 @@ export async function POST(request: NextRequest) {
         leads: files.leads,
         sistema: files.sistema,
         performance: files.performance,
+        campanhas: files.campanhas,
+        outros_colaboradores: files.outros_colaboradores,
       },
       dataRelatorio,
       parseInt(unidadeId),
