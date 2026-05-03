@@ -110,19 +110,46 @@ async function lerXLSX(file: File, range: number = 0): Promise<any[]> {
   return XLSX.utils.sheet_to_json(sheet, { range, defval: null, raw: false });
 }
 
+// Parser CSV minimo que respeita aspas (campos podem conter ; entre aspas).
+// Tambem remove aspas envoltorias e BOM.
+function parseCSVLine(linha: string, sep: string = ';'): string[] {
+  const out: string[] = [];
+  let buf = '';
+  let dentroAspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const c = linha[i];
+    if (c === '"') {
+      // Aspas duplas escapadas dentro de campo aspeado: ""
+      if (dentroAspas && linha[i + 1] === '"') {
+        buf += '"';
+        i++;
+      } else {
+        dentroAspas = !dentroAspas;
+      }
+    } else if (c === sep && !dentroAspas) {
+      out.push(buf);
+      buf = '';
+    } else {
+      buf += c;
+    }
+  }
+  out.push(buf);
+  return out.map(s => s.trim());
+}
+
 async function lerCSVPerformance(file: File): Promise<any[]> {
   let texto = await file.text();
   texto = texto.replace(/^﻿/, ''); // remove BOM
   const linhas = texto.split(/\r?\n/).filter(l => l.trim());
   if (linhas.length < 2) return [];
 
-  const headers = linhas[0].split(';').map(h => h.trim());
+  const headers = parseCSVLine(linhas[0]);
   const dados: any[] = [];
   for (let i = 1; i < linhas.length; i++) {
-    const valores = linhas[i].split(';');
+    const valores = parseCSVLine(linhas[i]);
     const row: any = {};
     headers.forEach((h, idx) => {
-      row[h] = valores[idx]?.trim() ?? null;
+      row[h] = valores[idx] ?? null;
     });
     dados.push(row);
   }

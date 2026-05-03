@@ -97,7 +97,13 @@ const VAZIOS = new Set<string>(['', '0', 'null', 'undefined', 'origem desconheci
  */
 export function mapearOrigem(raw: string | null | undefined): string {
   if (raw === null || raw === undefined) return ROTULO_SEM_ORIGEM;
-  const trimmed = String(raw).trim();
+  // Remove aspas envolventes (dados antigos do CSV podem ter "aspa" literal)
+  // e zero-width chars que aparecem em alguns exports do sistema.
+  const trimmed = String(raw)
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/[​-‍﻿]/g, '')
+    .trim();
   const lower = trimmed.toLowerCase();
   if (VAZIOS.has(lower)) return ROTULO_SEM_ORIGEM;
   const canonica = ALIASES_LOWER[lower];

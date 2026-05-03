@@ -31,156 +31,172 @@ function ratio(num: number, den: number): number | null {
   return num / den;
 }
 
+// Acumulador interno: Sets de chaves de paciente unico para cada etapa.
+interface AcumuladorOrigem {
+  cadastrados: Set<string>;
+  agendados: Set<string>;
+  compareceram: Set<string>;
+  fecharam: Set<string>;
+  pagaram: Set<string>;
+}
+
+function novoAcumulador(): AcumuladorOrigem {
+  return {
+    cadastrados: new Set(),
+    agendados: new Set(),
+    compareceram: new Set(),
+    fecharam: new Set(),
+    pagaram: new Set(),
+  };
+}
+
+function chavePacienteSistema(r: any): string {
+  // Prefere id_externo (mais confiavel), fallback para telefone normalizado.
+  return r.paciente_id_externo
+    ? `id:${r.paciente_id_externo}`
+    : r.telefone_norm
+      ? `tel:${r.telefone_norm}`
+      : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
+}
+
+function chavePacienteKommo(r: any): string {
+  return r.telefone_norm
+    ? `tel:${r.telefone_norm}`
+    : `lead:${(r.nome || '').toLowerCase().trim()}::${r.data_cadastro || ''}`;
+}
+
+function chavePacientePerf(r: any): string {
+  return r.telefone_norm
+    ? `tel:${r.telefone_norm}`
+    : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const unidadeIdParam = searchParams.get('unidade_id');
     const unidadeId = unidadeIdParam ? parseInt(unidadeIdParam, 10) : null;
-    const dataInicio = searchParams.get('data_inicio'); // YYYY-MM-DD
+    const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
-    // ── 1. Carrega raw_leads (Kommo) ────────────────────────────────────────
+    // ── 1. raw_leads (Kommo) ───────────────────────────────────────────────
     let qLeads = supabase
       .from('raw_leads')
-      .select('origem, data_cadastro, telefone_norm, unidade_id');
+      .select('origem, data_cadastro, telefone_norm, nome, unidade_id');
     if (unidadeId) qLeads = qLeads.eq('unidade_id', unidadeId);
     if (dataInicio) qLeads = qLeads.gte('data_cadastro', dataInicio);
     if (dataFim) qLeads = qLeads.lte('data_cadastro', dataFim);
     const { data: leadsRows, error: errLeads } = await qLeads;
     if (errLeads) throw new Error(`raw_leads: ${errLeads.message}`);
 
-    // ── 2. Carrega raw_sistema (Orthodontic) ───────────────────────────────
+    // ── 2. raw_sistema (Orthodontic) ───────────────────────────────────────
     let qSis = supabase
       .from('raw_sistema')
       .select(
-        'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, unidade_id',
+        'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id',
       );
     if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
+    // Para o sistema, usamos data_avaliacao como referencia temporal principal,
+    // mas tambem aceitamos linhas com qualquer data dentro do periodo.
     if (dataInicio) qSis = qSis.gte('data_avaliacao', dataInicio);
     if (dataFim) qSis = qSis.lte('data_avaliacao', dataFim);
     const { data: sistemaRows, error: errSis } = await qSis;
     if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
 
-    // ── 3. Carrega raw_performance (Telemarketing) ─────────────────────────
+    // ── 3. raw_performance (Telemarketing) ─────────────────────────────────
     let qPerf = supabase
       .from('raw_performance')
-      .select('origem, compareceu, status, telefone_norm, data, unidade_id');
+      .select(
+        'origem, compareceu, status, telefone_norm, paciente_nome, data, unidade_id',
+      );
     if (unidadeId) qPerf = qPerf.eq('unidade_id', unidadeId);
     if (dataInicio) qPerf = qPerf.gte('data', dataInicio);
     if (dataFim) qPerf = qPerf.lte('data', dataFim);
     const { data: perfRows, error: errPerf } = await qPerf;
     if (errPerf) throw new Error(`raw_performance: ${errPerf.message}`);
 
-    // ── 4. Inicializa mapas ───────────────────────────────────────────────
-    const funilPorOrigem: Map<string, EtapasFunil> = new Map();
-
-    function getOrInit(origem: string): EtapasFunil {
-      if (!funilPorOrigem.has(origem)) {
-        funilPorOrigem.set(origem, {
-          cadastrados: 0,
-          agendados: 0,
-          compareceram: 0,
-          fecharam: 0,
-          pagaram: 0,
-        });
-      }
-      return funilPorOrigem.get(origem)!;
+    // ── 4. Acumular por origem normalizada (Sets para deduplicar) ──────────
+    const acc: Map<string, AcumuladorOrigem> = new Map();
+    function get(origem: string): AcumuladorOrigem {
+      if (!acc.has(origem)) acc.set(origem, novoAcumulador());
+      return acc.get(origem)!;
     }
-
-    // Garante que as 5 canonicas Kommo apareçam mesmo se nao tiverem dados
-    for (const c of ORIGENS_KOMMO_CANONICAS) {
-      getOrInit(c);
-    }
+    // Garante visibilidade das 5 origens Kommo mesmo sem dados
+    for (const c of ORIGENS_KOMMO_CANONICAS) get(c);
 
     // ── 5. Cadastrados ────────────────────────────────────────────────────
-    // Origens Kommo: contar a partir de raw_leads.
+    // Para origens Kommo: 1 cadastrado por linha de raw_leads (deduplicado
+    // por telefone para nao contar lead duplicado).
     for (const r of leadsRows || []) {
       const origem = mapearOrigem(r.origem);
-      // Se a origem do lead Kommo nao bate com nenhuma das 5 canonicas, ainda
-      // contamos mas marca como origem propria (pode ser que a equipe tenha
-      // cadastrado origem extra no Kommo).
-      const e = getOrInit(origem);
-      e.cadastrados += 1;
+      get(origem).cadastrados.add(chavePacienteKommo(r));
     }
 
-    // Origens Sistema (nao-Kommo): cada paciente eh um cadastrado.
-    // Usamos paciente_id_externo + telefone para deduplicar.
-    const pacientesContados = new Set<string>();
+    // Para origens Sistema (nao-Kommo): 1 cadastrado por paciente unico no
+    // raw_sistema (porque o lead nasce direto la).
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
-      // So contamos como "cadastrado" se NAO for origem Kommo (pra Kommo,
-      // o cadastro vem de raw_leads acima).
       if (isOrigemKommo(origem)) continue;
-      const key = `${r.paciente_id_externo || r.telefone_norm || ''}::${origem}`;
-      if (pacientesContados.has(key)) continue;
-      pacientesContados.add(key);
-      const e = getOrInit(origem);
-      e.cadastrados += 1;
+      get(origem).cadastrados.add(chavePacienteSistema(r));
     }
 
-    // ── 6. Agendados, Fecharam, Pagaram (sempre raw_sistema) ──────────────
-    const sistemaPorPaciente: Set<string> = new Set();
+    // ── 6. Agendados / Fecharam / Pagaram (sempre raw_sistema) ─────────────
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
-      const e = getOrInit(origem);
-      const key = `${r.paciente_id_externo || r.telefone_norm || Math.random()}`;
-      // Agendados = ter avaliacao agendada (data_avaliacao preenchida).
-      // Para origens Sistema, pode ser igual a "cadastrados".
-      if (r.data_avaliacao && !sistemaPorPaciente.has(`AG:${origem}:${key}`)) {
-        sistemaPorPaciente.add(`AG:${origem}:${key}`);
-        e.agendados += 1;
-      }
-      if (r.data_contrato) e.fecharam += 1;
-      if (r.data_pgto) e.pagaram += 1;
+      const a = get(origem);
+      const k = chavePacienteSistema(r);
+      if (r.data_avaliacao) a.agendados.add(k);
+      if (r.data_contrato) a.fecharam.add(k);
+      if (r.data_pgto) a.pagaram.add(k);
     }
 
-    // ── 7. Compareceram (raw_performance é mais confiavel) ────────────────
-    const compareceuPorOrigem: Map<string, number> = new Map();
+    // ── 7. Compareceram ───────────────────────────────────────────────────
+    // Preferencia: raw_performance (mais granular). Conta paciente unico que
+    // teve compareceu=true em qualquer linha.
     for (const r of perfRows || []) {
+      if (!r.compareceu) continue;
       const origem = mapearOrigem(r.origem);
-      if (r.compareceu) {
-        compareceuPorOrigem.set(origem, (compareceuPorOrigem.get(origem) || 0) + 1);
-      }
+      get(origem).compareceram.add(chavePacientePerf(r));
     }
 
-    // Aplica comparecimentos no funil
-    for (const [origem, n] of compareceuPorOrigem.entries()) {
-      const e = getOrInit(origem);
-      e.compareceram = n;
-    }
-
-    // Fallback: se uma origem tem agendados mas zero comparecimentos do raw_performance,
-    // estima compareceram a partir do raw_sistema (situacao != Faltou e tem data_avaliacao).
-    for (const [origem, etapas] of funilPorOrigem.entries()) {
-      if (etapas.compareceram === 0 && etapas.agendados > 0) {
-        const sistemaCompareceram = (sistemaRows || []).filter(r => {
-          const o = mapearOrigem(r.origem);
-          if (o !== origem) return false;
-          if (!r.data_avaliacao) return false;
-          const sit = String(r.situacao || '').toLowerCase();
-          if (sit.includes('faltou') || sit.includes('cancel')) return false;
-          return true;
-        }).length;
-        etapas.compareceram = sistemaCompareceram;
+    // Fallback: se a origem tem agendados mas zero compareceram do raw_perf,
+    // tentamos inferir a partir do raw_sistema (data_avaliacao preenchida e
+    // situacao nao indica falta/cancelamento).
+    for (const [origem, a] of acc.entries()) {
+      if (a.compareceram.size > 0 || a.agendados.size === 0) continue;
+      for (const r of sistemaRows || []) {
+        const o = mapearOrigem(r.origem);
+        if (o !== origem) continue;
+        if (!r.data_avaliacao) continue;
+        const sit = String(r.situacao || '').toLowerCase();
+        if (sit.includes('faltou') || sit.includes('cancel')) continue;
+        a.compareceram.add(chavePacienteSistema(r));
       }
     }
 
     // ── 8. Monta lista final ──────────────────────────────────────────────
     const funis: FunilOrigem[] = [];
-    for (const [origem, etapas] of funilPorOrigem.entries()) {
+    for (const [origem, a] of acc.entries()) {
+      const cadastrados = a.cadastrados.size;
+      const agendados = a.agendados.size;
+      const compareceram = a.compareceram.size;
+      const fecharam = a.fecharam.size;
+      const pagaram = a.pagaram.size;
       funis.push({
         origem,
         fonte: isOrigemKommo(origem) ? 'kommo' : 'sistema',
-        ...etapas,
-        taxa_cadastro_para_agendamento: ratio(etapas.agendados, etapas.cadastrados),
-        taxa_agendamento_para_comparecimento: ratio(etapas.compareceram, etapas.agendados),
-        taxa_comparecimento_para_fechamento: ratio(etapas.fecharam, etapas.compareceram),
-        taxa_fechamento_para_pagamento: ratio(etapas.pagaram, etapas.fecharam),
+        cadastrados,
+        agendados,
+        compareceram,
+        fecharam,
+        pagaram,
+        taxa_cadastro_para_agendamento: ratio(agendados, cadastrados),
+        taxa_agendamento_para_comparecimento: ratio(compareceram, agendados),
+        taxa_comparecimento_para_fechamento: ratio(fecharam, compareceram),
+        taxa_fechamento_para_pagamento: ratio(pagaram, fecharam),
       });
     }
 
-    // Ordena: Kommo primeiro (fixo na ordem da lista), depois sistema por
-    // cadastrados desc.
     funis.sort((a, b) => {
       if (a.fonte !== b.fonte) return a.fonte === 'kommo' ? -1 : 1;
       if (a.fonte === 'kommo') {
@@ -188,13 +204,11 @@ export async function GET(request: NextRequest) {
         const orderB = ORIGENS_KOMMO_CANONICAS.indexOf(b.origem as any);
         return orderA - orderB;
       }
-      // sistema: "Sem origem" por ultimo, resto por cadastrados desc
       if (a.origem === ROTULO_SEM_ORIGEM) return 1;
       if (b.origem === ROTULO_SEM_ORIGEM) return -1;
       return b.cadastrados - a.cadastrados;
     });
 
-    // Total geral
     const total: EtapasFunil = funis.reduce(
       (acc, f) => ({
         cadastrados: acc.cadastrados + f.cadastrados,
