@@ -592,16 +592,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                       Abrir Relatório →
                     </a>
                   </div>
-                  <div className="bg-amber-950/40 border border-amber-600/60 rounded-md p-3 mb-2">
-                    <p className="text-amber-200 text-xs font-semibold mb-1">
-                      ⚠️ ATENÇÃO — MUDOU: agora use "Data de Pagamento"
-                    </p>
-                    <p className="text-amber-100/80 text-xs">
-                      Antes pedia "Data de Fechamento". Agora o filtro deve ser <strong className="text-amber-200">Contratos por Data de Pagamento</strong> — só entram contratos efetivamente pagos.
-                    </p>
-                  </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
-                    <p><strong>Filtro:</strong> Status = <span className="text-amber-300 font-semibold">Contratos por Data de Pagamento</span>, Período = mês corrente até hoje</p>
+                    <p><strong>Filtro:</strong> Status = Contratos por Data de Pagamento, Período = mês corrente até hoje</p>
                     <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → baixe diretamente (sem renomear)</p>
                   </div>
                 </div>
