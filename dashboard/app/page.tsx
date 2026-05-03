@@ -44,7 +44,7 @@ function buildParams(uId: number, desde?: string, ate?: string): string {
   return p.toString() ? `?${p.toString()}` : '';
 }
 
-type MapaMetas = Partial<Record<'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' | 'receita', number>>;
+type MapaMetas = Partial<Record<'agendados' | 'compareceram' | 'fecharam' | 'pagaram', number>>;
 
 export default function Home() {
   const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('mes');
@@ -138,7 +138,6 @@ export default function Home() {
               label="Cadastrados"
               valor={total.cadastrados}
               valorAnterior={totalAnt?.cadastrados}
-              meta={metas.cadastrados}
               tooltip="Pacientes únicos cadastrados no período (Kommo + sistema Orthodontic, sem duplicar)."
               unidadeId={unidadeId}
               tipos={['leads', 'sistema']}
@@ -174,7 +173,6 @@ export default function Home() {
               label="Receita"
               valor={total.receita}
               valorAnterior={totalAnt?.receita}
-              meta={metas.receita}
               tooltip="Soma de vlr_contrato dos pacientes com pagamento confirmado (data_pgto) no período."
               moeda
               unidadeId={unidadeId}

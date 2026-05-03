@@ -11,15 +11,13 @@ type Meta = {
   valor: number;
 };
 
-type TipoMeta = 'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' | 'receita';
+type TipoMeta = 'agendados' | 'compareceram' | 'fecharam' | 'pagaram';
 
 const TIPOS: { id: TipoMeta; nome: string; ehMoeda?: boolean }[] = [
-  { id: 'cadastrados', nome: 'Cadastrados' },
   { id: 'agendados', nome: 'Agendados' },
   { id: 'compareceram', nome: 'Compareceram' },
   { id: 'fecharam', nome: 'Fecharam' },
   { id: 'pagaram', nome: 'Pagaram' },
-  { id: 'receita', nome: 'Receita (R$)', ehMoeda: true },
 ];
 
 function mesAtual(): string {
@@ -48,7 +46,7 @@ export default function MetasPage() {
   const [mes, setMes] = useState(mesAtual());
   const [unidadeId, setUnidadeId] = useState(1);
   const [valores, setValores] = useState<Record<TipoMeta, string>>({
-    cadastrados: '', agendados: '', compareceram: '', fecharam: '', pagaram: '', receita: '',
+    agendados: '', compareceram: '', fecharam: '', pagaram: '',
   });
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -66,13 +64,15 @@ export default function MetasPage() {
       const json = await res.json();
       if (json.error) {
         setErro(json.error);
-        setValores({ cadastrados: '', agendados: '', compareceram: '', fecharam: '', pagaram: '', receita: '' });
+        setValores({ agendados: '', compareceram: '', fecharam: '', pagaram: '' });
       } else {
         const novo: Record<TipoMeta, string> = {
-          cadastrados: '', agendados: '', compareceram: '', fecharam: '', pagaram: '', receita: '',
+          agendados: '', compareceram: '', fecharam: '', pagaram: '',
         };
         for (const m of json.metas as Meta[]) {
-          novo[m.tipo] = String(m.valor);
+          if (m.tipo in novo) {
+            novo[m.tipo as TipoMeta] = String(m.valor);
+          }
         }
         setValores(novo);
       }

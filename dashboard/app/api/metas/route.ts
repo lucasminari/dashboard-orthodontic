@@ -4,12 +4,10 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 
 const TIPOS_VALIDOS = [
-  'cadastrados',
   'agendados',
   'compareceram',
   'fecharam',
   'pagaram',
-  'receita',
 ] as const;
 type TipoMeta = (typeof TIPOS_VALIDOS)[number];
 
