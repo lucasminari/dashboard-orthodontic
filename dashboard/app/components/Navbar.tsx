@@ -36,6 +36,16 @@ export default function Navbar() {
             Funil por campanha
           </Link>
           <Link
+            href="/funis-individuais"
+            className={`text-sm font-medium transition-colors ${
+              isActive('/funis-individuais')
+                ? 'text-indigo-400'
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            Funis individuais
+          </Link>
+          <Link
             href="/comparativo"
             className={`text-sm font-medium transition-colors ${
               isActive('/comparativo')
