@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { AtualizadoEm } from '../components/AtualizadoEm';
 
 type FunilOrigem = {
@@ -273,7 +274,10 @@ function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }
   const max = Math.max(...etapas.map(e => e.valor), 1);
 
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-lg ${compact ? 'p-3' : 'p-5'}`}>
+    <Link
+      href={`/origem/${encodeURIComponent(f.origem)}`}
+      className={`block bg-gray-900 border border-gray-800 hover:border-indigo-700/60 hover:bg-gray-900/90 transition rounded-lg ${compact ? 'p-3' : 'p-5'} cursor-pointer`}
+    >
       <div className={`flex items-baseline justify-between mb-${compact ? '2' : '4'}`}>
         <h3 className={`font-semibold ${compact ? 'text-sm' : 'text-base'} text-gray-100 truncate pr-2`}>
           {f.origem}
@@ -307,6 +311,9 @@ function MiniFunil({ f, compact = false }: { f: FunilOrigem; compact?: boolean }
           );
         })}
       </div>
-    </div>
+      <div className={`${compact ? 'mt-2' : 'mt-3'} text-[10px] text-indigo-400/70 text-right`}>
+        ver detalhes →
+      </div>
+    </Link>
   );
 }
