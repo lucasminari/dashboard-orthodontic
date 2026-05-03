@@ -23,11 +23,6 @@ type Lembrete = {
   dentista: string | null; atendente: string | null;
   urgencia: 'alta' | 'media' | 'baixa';
 };
-type ComparativoUnidade = {
-  unidade_id: number; nome: string; leads_kommo: number; leads_ortho: number;
-  agendados: number; compareceram: number; fecharam: number; pagaram: number; receita: number;
-  taxa_comparecimento: number; taxa_fechamento: number; taxa_pagamento: number;
-};
 
 const UNIDADES = [
   { id: 0, nome: 'Todas as unidades' },
@@ -73,7 +68,6 @@ export default function Home() {
   const [dados, setDados] = useState<Dados | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
-  const [comparativo, setComparativo] = useState<ComparativoUnidade[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
@@ -98,20 +92,17 @@ export default function Home() {
     const qFunil = paramsFunil.toString() ? `?${paramsFunil.toString()}` : '';
 
     try {
-      const [d, f, l, c] = await Promise.all([
+      const [d, f, l] = await Promise.all([
         fetch(`/api/kpis${q}`).then(res => res.json()),
         fetch(`/api/funil-completo${qFunil}`).then(res => res.json()),
         fetch(`/api/lembretes${uId ? `?unidade=${uId}` : ''}`).then(res => res.json()),
-        fetch(`/api/comparativo`).then(res => res.json()),
       ]);
       if (d.erro) throw new Error(d.erro);
       if (f.error) throw new Error(f.error);
       if (l.erro) throw new Error(l.erro);
-      if (c.erro) throw new Error(c.erro);
       setDados(d);
       setFunilOrigens(f.funis);
       setLembretes(l.lembretes);
-      setComparativo(c.unidades);
     } catch (e: any) {
       setErro(e.message);
     } finally {
@@ -204,7 +195,7 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
-      {!dados || !funilOrigens || !lembretes || !comparativo ? (
+      {!dados || !funilOrigens || !lembretes ? (
         <div className="text-gray-400">Carregando...</div>
       ) : (
         <>
@@ -215,8 +206,6 @@ export default function Home() {
             <Card label="Pagaram"      valor={dados.funil.pagaram.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
             <Card label="Receita"      valor={`R$ ${fmtBR(dados.financeiro.receita_realizada)}`} sub={`+ R$ ${fmtBR(dados.financeiro.pipeline_futuro)} pipeline`} unidadeId={unidadeId} tipos={['sistema']} />
           </div>
-
-          <Comparativo unidades={comparativo} fmtBR={fmtBR} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <Funil dados={dados} unidadeId={unidadeId} />
@@ -259,57 +248,6 @@ function Card({
           <AtualizadoEm tipos={tipos} unidadeId={unidadeId || undefined} compacto />
         </div>
       )}
-    </div>
-  );
-}
-
-function Comparativo({ unidades, fmtBR }: { unidades: ComparativoUnidade[]; fmtBR: (n: number) => string }) {
-  const maxLeads = Math.max(...unidades.map(u => u.leads_kommo), 1);
-  const cores = ['#6366f1', '#8b5cf6', '#22c55e'];
-  return (
-    <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
-      <div className="flex items-start justify-between mb-1">
-        <h2 className="text-lg font-semibold">Comparativo entre unidades</h2>
-        <AtualizadoEm tipos={['leads', 'sistema', 'performance']} />
-      </div>
-      <p className="text-xs text-gray-500 mb-6">Leads do Kommo · cruzamento com OrthoDontic · sempre mostra dado total</p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {unidades.map((u, i) => {
-          const pct = (u.leads_kommo / maxLeads) * 100;
-          return (
-            <div key={u.unidade_id} className="bg-gray-950 rounded-lg p-5 border border-gray-800">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">{u.nome}</h3>
-                <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: cores[i] + '33', color: cores[i] }}>
-                  {u.leads_kommo.toLocaleString('pt-BR')} leads
-                </span>
-              </div>
-              <div className="bg-gray-800 rounded h-2 overflow-hidden mb-4">
-                <div className="h-full" style={{ width: `${pct}%`, backgroundColor: cores[i] }} />
-              </div>
-              <div className="space-y-2 text-sm">
-                <Linha label="Agendados"     valor={u.agendados.toLocaleString('pt-BR')} />
-                <Linha label="Compareceram"  valor={`${u.compareceram} (${u.taxa_comparecimento.toFixed(0)}%)`} />
-                <Linha label="Fecharam"      valor={`${u.fecharam} (${u.taxa_fechamento.toFixed(0)}%)`} />
-                <Linha label="Pagaram"       valor={`${u.pagaram} (${u.taxa_pagamento.toFixed(0)}%)`} />
-                <div className="pt-2 mt-2 border-t border-gray-800 flex justify-between">
-                  <span className="text-gray-400">Receita</span>
-                  <span className="font-semibold">R$ {fmtBR(u.receita)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Linha({ label, valor }: { label: string; valor: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-gray-400">{label}</span>
-      <span>{valor}</span>
     </div>
   );
 }

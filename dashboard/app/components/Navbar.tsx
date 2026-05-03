@@ -36,6 +36,16 @@ export default function Navbar() {
             Funil por campanha
           </Link>
           <Link
+            href="/comparativo"
+            className={`text-sm font-medium transition-colors ${
+              isActive('/comparativo')
+                ? 'text-indigo-400'
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            Comparativo
+          </Link>
+          <Link
             href="/import"
             className={`text-sm font-medium transition-colors ${
               isActive('/import')
