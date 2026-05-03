@@ -1,13 +1,20 @@
 'use client';
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
+import Link from 'next/link';
 import { AtualizadoEm } from './components/AtualizadoEm';
 import { Alertas } from './components/Alertas';
 import { useFiltros, UNIDADES, PERIODOS } from './components/useFiltros';
+import { Skeleton, SkeletonCard } from './components/Skeleton';
+import { Tooltip } from './components/Tooltip';
 
-type Dados = {
-  funil: { leads: number; agendados: number; compareceram: number; fecharam: number; pagaram: number };
-  financeiro: { receita_realizada: number; pipeline_futuro: number };
+type TotalFunil = {
+  cadastrados: number;
+  agendados: number;
+  compareceram: number;
+  fecharam: number;
+  pagaram: number;
+  receita: number;
 };
 type FunilOrigem = {
   origem: string;
@@ -26,52 +33,54 @@ type Lembrete = {
   urgencia: 'alta' | 'media' | 'baixa';
 };
 
+function buildParams(uId: number, desde?: string, ate?: string): string {
+  const p = new URLSearchParams();
+  if (uId) p.set('unidade_id', String(uId));
+  if (desde) p.set('data_inicio', desde);
+  if (ate) p.set('data_fim', ate);
+  return p.toString() ? `?${p.toString()}` : '';
+}
+
 export default function Home() {
-  const { unidadeId, periodoId, intervalo, pronto } = useFiltros('mes');
-  const [dados, setDados] = useState<Dados | null>(null);
+  const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('mes');
+  const [total, setTotal] = useState<TotalFunil | null>(null);
+  const [totalAnt, setTotalAnt] = useState<TotalFunil | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  const carregar = useCallback(async (uId: number, desde?: string, ate?: string) => {
+  const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
-    const params = new URLSearchParams();
-    if (uId) params.set('unidade', String(uId));
-    if (desde) params.set('desde', desde);
-    if (ate)   params.set('ate', ate);
-    const q = params.toString() ? `?${params.toString()}` : '';
-
-    const paramsFunil = new URLSearchParams();
-    if (uId) paramsFunil.set('unidade_id', String(uId));
-    if (desde) paramsFunil.set('data_inicio', desde);
-    if (ate) paramsFunil.set('data_fim', ate);
-    const qFunil = paramsFunil.toString() ? `?${paramsFunil.toString()}` : '';
+    const qAtual = buildParams(unidadeId, intervalo.desde, intervalo.ate);
+    const qAnt = intervaloAnt.desde && intervaloAnt.ate
+      ? buildParams(unidadeId, intervaloAnt.desde, intervaloAnt.ate)
+      : null;
 
     try {
-      const [d, f, l] = await Promise.all([
-        fetch(`/api/kpis${q}`).then(res => res.json()),
-        fetch(`/api/funil-completo${qFunil}`).then(res => res.json()),
-        fetch(`/api/lembretes${uId ? `?unidade=${uId}` : ''}`).then(res => res.json()),
+      const [funilAtual, funilAnt, lembRes] = await Promise.all([
+        fetch(`/api/funil-completo${qAtual}`).then(res => res.json()),
+        qAnt ? fetch(`/api/funil-completo${qAnt}`).then(res => res.json()) : Promise.resolve(null),
+        fetch(`/api/lembretes${unidadeId ? `?unidade=${unidadeId}` : ''}`).then(res => res.json()),
       ]);
-      if (d.erro) throw new Error(d.erro);
-      if (f.error) throw new Error(f.error);
-      if (l.erro) throw new Error(l.erro);
-      setDados(d);
-      setFunilOrigens(f.funis);
-      setLembretes(l.lembretes);
+      if (funilAtual.error) throw new Error(funilAtual.error);
+      if (lembRes.erro) throw new Error(lembRes.erro);
+      setTotal(funilAtual.total);
+      setTotalAnt(funilAnt && !funilAnt.error ? funilAnt.total : null);
+      setFunilOrigens(funilAtual.funis);
+      setLembretes(lembRes.lembretes);
     } catch (e: any) {
       setErro(e.message);
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [unidadeId, intervalo.desde, intervalo.ate, intervaloAnt.desde, intervaloAnt.ate]);
 
   useEffect(() => {
     if (!pronto) return;
-    carregar(unidadeId, intervalo.desde, intervalo.ate);
-  }, [unidadeId, periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
+    carregar();
+  }, [carregar, pronto]);
 
   const fmtBR = (n: number) =>
     n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -97,22 +106,58 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
-      {!dados || !funilOrigens || !lembretes ? (
-        <div className="text-gray-400">Carregando...</div>
+      {!total || !funilOrigens || !lembretes ? (
+        <SkeletonPainel />
       ) : (
         <>
           <Alertas unidadeId={unidadeId || undefined} />
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <Card label="Leads"        valor={dados.funil.leads.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['leads']} />
-            <Card label="Agendados"    valor={dados.funil.agendados.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
-            <Card label="Fecharam"     valor={dados.funil.fecharam.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
-            <Card label="Pagaram"      valor={dados.funil.pagaram.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
-            <Card label="Receita"      valor={`R$ ${fmtBR(dados.financeiro.receita_realizada)}`} sub={`+ R$ ${fmtBR(dados.financeiro.pipeline_futuro)} pipeline`} unidadeId={unidadeId} tipos={['sistema']} />
+            <Card
+              label="Cadastrados"
+              valor={total.cadastrados}
+              valorAnterior={totalAnt?.cadastrados}
+              tooltip="Pacientes únicos cadastrados no período (Kommo + sistema Orthodontic, sem duplicar)."
+              unidadeId={unidadeId}
+              tipos={['leads', 'sistema']}
+            />
+            <Card
+              label="Agendados"
+              valor={total.agendados}
+              valorAnterior={totalAnt?.agendados}
+              tooltip="Pacientes únicos com agendamento (data de avaliação preenchida) no sistema Orthodontic, ou com atendimento de telemarketing."
+              unidadeId={unidadeId}
+              tipos={['sistema', 'performance']}
+            />
+            <Card
+              label="Compareceram"
+              valor={total.compareceram}
+              valorAnterior={totalAnt?.compareceram}
+              tooltip="Pacientes únicos que efetivamente compareceram à avaliação no período."
+              unidadeId={unidadeId}
+              tipos={['performance', 'sistema']}
+            />
+            <Card
+              label="Fecharam"
+              valor={total.fecharam}
+              valorAnterior={totalAnt?.fecharam}
+              tooltip="Pacientes que assinaram contrato no período (data de contrato preenchida)."
+              unidadeId={unidadeId}
+              tipos={['sistema']}
+            />
+            <Card
+              label="Receita"
+              valor={total.receita}
+              valorAnterior={totalAnt?.receita}
+              tooltip="Soma de vlr_contrato dos pacientes com pagamento confirmado (data_pgto) no período."
+              moeda
+              unidadeId={unidadeId}
+              tipos={['sistema']}
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Funil dados={dados} unidadeId={unidadeId} />
+            <FunilGrafico total={total} unidadeId={unidadeId} />
             <Origens origens={funilOrigens} unidadeId={unidadeId} />
           </div>
 
@@ -127,24 +172,73 @@ export default function Home() {
   );
 }
 
+function SkeletonPainel() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Skeleton className="h-72" />
+        <Skeleton className="h-72" />
+      </div>
+      <Skeleton className="h-48" />
+    </div>
+  );
+}
+
 function Card({
   label,
   valor,
-  sub,
+  valorAnterior,
+  tooltip,
+  moeda = false,
   unidadeId,
   tipos,
 }: {
   label: string;
-  valor: string;
-  sub?: string;
+  valor: number;
+  valorAnterior?: number;
+  tooltip?: string;
+  moeda?: boolean;
   unidadeId?: number;
   tipos?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
 }) {
+  const fmt = (n: number) =>
+    moeda
+      ? `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : n.toLocaleString('pt-BR');
+  const variacao =
+    valorAnterior !== undefined && valorAnterior > 0
+      ? (valor - valorAnterior) / valorAnterior
+      : valorAnterior === 0 && valor > 0
+        ? null
+        : valorAnterior === 0
+          ? 0
+          : null;
   return (
     <div className="bg-gray-900 rounded-lg p-5 border border-gray-800">
-      <div className="text-sm text-gray-400 mb-2">{label}</div>
-      <div className="text-2xl font-semibold">{valor}</div>
-      {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-sm text-gray-400">{label}</span>
+        {tooltip && <Tooltip texto={tooltip} />}
+      </div>
+      <div className="text-2xl font-semibold">{fmt(valor)}</div>
+      {valorAnterior !== undefined && (
+        <div className="text-xs mt-1 flex items-center gap-1">
+          {variacao === null ? (
+            <span className="text-gray-500">novo no período</span>
+          ) : variacao === 0 ? (
+            <span className="text-gray-500">igual ao período anterior</span>
+          ) : (
+            <>
+              <span className={variacao >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                {variacao >= 0 ? '↑' : '↓'} {Math.abs(variacao * 100).toFixed(0)}%
+              </span>
+              <span className="text-gray-500">vs anterior ({fmt(valorAnterior)})</span>
+            </>
+          )}
+        </div>
+      )}
       {tipos && (
         <div className="mt-2 pt-2 border-t border-gray-800">
           <AtualizadoEm tipos={tipos} unidadeId={unidadeId || undefined} compacto />
@@ -154,36 +248,40 @@ function Card({
   );
 }
 
-function Funil({ dados, unidadeId }: { dados: Dados; unidadeId?: number }) {
-  const f = dados.funil;
+function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: number }) {
   const etapas = [
-    { nome: 'Leads',        valor: f.leads,        cor: '#6366f1' },
-    { nome: 'Agendados',    valor: f.agendados,    cor: '#8b5cf6' },
-    { nome: 'Compareceram', valor: f.compareceram, cor: '#22c55e' },
-    { nome: 'Fecharam',     valor: f.fecharam,     cor: '#eab308' },
-    { nome: 'Pagaram',      valor: f.pagaram,      cor: '#f97316' },
+    { nome: 'Cadastrados',  valor: total.cadastrados,  cor: '#6366f1' },
+    { nome: 'Agendados',    valor: total.agendados,    cor: '#06b6d4' },
+    { nome: 'Compareceram', valor: total.compareceram, cor: '#a855f7' },
+    { nome: 'Fecharam',     valor: total.fecharam,     cor: '#eab308' },
+    { nome: 'Pagaram',      valor: total.pagaram,      cor: '#10b981' },
   ];
-  const max = Math.max(...etapas.map(e => e.valor));
+  const max = Math.max(...etapas.map(e => e.valor), 1);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex items-start justify-between mb-6">
-        <h2 className="text-lg font-semibold">Funil de conversão</h2>
+        <h2 className="text-lg font-semibold flex items-center gap-1.5">
+          Funil de conversão
+          <Tooltip texto="Cada etapa conta pacientes únicos. Taxa = % que avançou da etapa anterior. Cadastrados pode incluir leads que ainda estão em etapas iniciais." />
+        </h2>
         <AtualizadoEm tipos={['leads', 'sistema', 'performance']} unidadeId={unidadeId || undefined} />
       </div>
       <div className="space-y-3">
         {etapas.map((e, i) => {
-          const pct = max > 0 ? (e.valor / max) * 100 : 0;
-          const taxa = i === 0 ? 100 : etapas[i-1].valor > 0 ? Math.round((e.valor / etapas[i-1].valor) * 100) : 0;
+          const pct = (e.valor / max) * 100;
+          const valorAnterior = i === 0 ? 0 : etapas[i - 1].valor;
+          const taxa =
+            i === 0 ? null : valorAnterior > 0 ? Math.min(100, Math.round((e.valor / valorAnterior) * 100)) : 0;
           return (
             <div key={e.nome} className="flex items-center gap-4">
               <div className="w-32 text-sm text-gray-300">{e.nome}</div>
               <div className="flex-1 bg-gray-800 rounded h-9 relative overflow-hidden">
-                <div className="h-full rounded flex items-center pl-3" style={{ width: `${pct}%`, backgroundColor: e.cor }}>
+                <div className="h-full rounded flex items-center pl-3" style={{ width: `${pct}%`, backgroundColor: e.cor, minWidth: e.valor > 0 ? '40px' : '0' }}>
                   <span className="text-sm font-semibold text-white">{e.valor.toLocaleString('pt-BR')}</span>
                 </div>
               </div>
               <div className="w-16 text-right text-sm text-gray-400">
-                {i === 0 ? '—' : `${taxa}%`}
+                {taxa === null ? '' : `${taxa}%`}
               </div>
             </div>
           );
@@ -256,7 +354,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
         <h2 className="text-lg font-semibold">Leads por origem</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
-      <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
+      <p className="text-xs text-gray-500 mb-6">Clique numa campanha para abrir o detalhamento.</p>
       {linhas.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem registrada para esta combinação de filtros.</div>
       ) : (
@@ -265,18 +363,22 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
             const isOutros = o.origem === 'Outros';
             const pct = (o.cadastrados / max) * 100;
             const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
-            return (
-              <div key={o.origem}>
+
+            const conteudo = (
+              <>
                 <div
                   className={`flex items-center justify-between text-sm mb-1 ${isOutros ? 'cursor-pointer hover:opacity-80' : ''}`}
                   onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
                 >
-                  <span className={`flex items-center gap-1 ${isOutros ? 'text-gray-200 font-medium' : 'text-gray-300'}`}>
+                  <span className={`flex items-center gap-1 ${isOutros ? 'text-gray-200 font-medium' : 'text-gray-200 group-hover:text-indigo-300 transition'}`}>
                     {isOutros && (
                       <span className="text-xs text-gray-500 w-3">{outrosAberto ? '▼' : '▶'}</span>
                     )}
                     {o.origem}
                     {isOutros && <span className="text-xs text-gray-500">({outros.length})</span>}
+                    {!isOutros && (
+                      <span className="text-[10px] text-indigo-500/70 opacity-0 group-hover:opacity-100 transition">→</span>
+                    )}
                   </span>
                   <span className="text-gray-400">
                     {o.cadastrados.toLocaleString('pt-BR')} leads
@@ -293,14 +395,36 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-                {/* Detalhamento expandido de Outros */}
+              </>
+            );
+
+            return (
+              <div key={o.origem}>
+                {isOutros ? (
+                  <div>{conteudo}</div>
+                ) : (
+                  <Link
+                    href={`/origem/${encodeURIComponent(o.origem)}`}
+                    className="block group"
+                  >
+                    {conteudo}
+                  </Link>
+                )}
+                {/* Detalhamento expandido de Outros (sub-linhas tambem clicaveis) */}
                 {isOutros && outrosAberto && (
                   <div className="mt-3 ml-4 pl-3 border-l border-gray-800 space-y-2">
                     {outros.map(sub => {
                       const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
                       return (
-                        <div key={sub.origem} className="flex items-center justify-between text-xs">
-                          <span className="text-gray-400">{sub.origem}</span>
+                        <Link
+                          key={sub.origem}
+                          href={`/origem/${encodeURIComponent(sub.origem)}`}
+                          className="flex items-center justify-between text-xs hover:text-indigo-300 transition group"
+                        >
+                          <span className="text-gray-400 group-hover:text-indigo-300">
+                            {sub.origem}
+                            <span className="text-[10px] text-indigo-500/70 opacity-0 group-hover:opacity-100 ml-1">→</span>
+                          </span>
                           <span className="text-gray-500">
                             {sub.cadastrados.toLocaleString('pt-BR')} leads
                             {sub.fecharam > 0 && (
@@ -309,7 +433,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                               </span>
                             )}
                           </span>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>

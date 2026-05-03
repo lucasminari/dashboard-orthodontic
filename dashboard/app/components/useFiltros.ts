@@ -35,9 +35,13 @@ export const PERIODOS: { id: PeriodoId; nome: string }[] = [
 const KEY_UNIDADE = 'filtro-unidade-id';
 const KEY_PERIODO = 'filtro-periodo-id';
 
+function fmtData(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string } {
   const hoje = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const fmt = fmtData;
   if (id === 'hoje') return { desde: fmt(hoje), ate: fmt(hoje) };
   if (id === 'ontem') {
     const d = new Date(hoje);
@@ -80,12 +84,57 @@ export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string 
   return {};
 }
 
+/**
+ * Calcula o periodo equivalente anterior pra comparacao temporal.
+ * Ex: "Este mes" -> mes anterior (mesmo intervalo de dias).
+ *     "7 dias" -> 7 dias antes desses 7.
+ *     "Tudo" -> nada (nao da pra comparar).
+ */
+export function intervaloAnterior(id: PeriodoId): { desde?: string; ate?: string } {
+  const hoje = new Date();
+  const fmt = fmtData;
+
+  if (id === 'tudo' || id === 'personalizado') return {};
+
+  if (id === 'mes') {
+    // Mes anterior, mesmo dia inicial ate dia atual (ex: 1-15 -> mes passado 1-15)
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+    return { desde: fmt(ini), ate: fmt(fim) };
+  }
+  if (id === '30d') {
+    // Mes anterior do mes anterior (mes -2 fechado)
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 0);
+    return { desde: fmt(ini), ate: fmt(fim) };
+  }
+  if (id === 'trimestre') {
+    const trimMes = Math.floor(hoje.getMonth() / 3) * 3;
+    const ini = new Date(hoje.getFullYear(), trimMes - 3, 1);
+    const fim = new Date(hoje.getFullYear(), trimMes, 0);
+    return { desde: fmt(ini), ate: fmt(fim) };
+  }
+
+  // Pra outros: pega duracao do intervalo atual e desloca pra tras
+  const atual = intervaloPeriodo(id);
+  if (!atual.desde || !atual.ate) return {};
+  const ini = new Date(atual.desde + 'T00:00:00');
+  const fim = new Date(atual.ate + 'T00:00:00');
+  const dias = Math.round((fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24));
+  const novoFim = new Date(ini);
+  novoFim.setDate(novoFim.getDate() - 1);
+  const novoIni = new Date(novoFim);
+  novoIni.setDate(novoIni.getDate() - dias);
+  return { desde: fmt(novoIni), ate: fmt(novoFim) };
+}
+
 interface UseFiltrosReturn {
   unidadeId: number;
   periodoId: PeriodoId;
   setUnidadeId: (id: number) => void;
   setPeriodoId: (id: PeriodoId) => void;
   intervalo: { desde?: string; ate?: string };
+  intervaloAnt: { desde?: string; ate?: string };
   pronto: boolean; // aguarda hidratar do localStorage antes de fazer fetch
 }
 
@@ -132,6 +181,7 @@ export function useFiltros(periodoDefault: PeriodoId = 'mes'): UseFiltrosReturn 
   }, []);
 
   const intervalo = intervaloPeriodo(periodoId);
+  const intervaloAnt = intervaloAnterior(periodoId);
 
-  return { unidadeId, periodoId, setUnidadeId, setPeriodoId, intervalo, pronto };
+  return { unidadeId, periodoId, setUnidadeId, setPeriodoId, intervalo, intervaloAnt, pronto };
 }

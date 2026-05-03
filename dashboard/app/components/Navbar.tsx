@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FiltrosHeader } from './FiltrosHeader';
 import { useFiltros } from './useFiltros';
+import { AtualizadoEm } from './AtualizadoEm';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -65,7 +66,14 @@ export default function Navbar() {
           </Link>
         </div>
         {mostraFiltros && (
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <span className="hidden md:block">
+              <AtualizadoEm
+                tipos={['leads', 'sistema', 'performance']}
+                unidadeId={unidadeId || undefined}
+                compacto
+              />
+            </span>
             <FiltrosHeader
               unidadeId={unidadeId}
               periodoId={periodoId}
