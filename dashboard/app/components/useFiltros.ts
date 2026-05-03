@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode, createElement } from 'react';
 
 export type PeriodoId =
   | 'tudo'
@@ -57,7 +57,6 @@ export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string 
     return { desde: fmt(d), ate: fmt(hoje) };
   }
   if (id === 'semana') {
-    // Segunda-feira da semana atual
     const d = new Date(hoje);
     const dia = d.getDay() || 7;
     d.setDate(d.getDate() - (dia - 1));
@@ -73,13 +72,11 @@ export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string 
     return { desde: fmt(d), ate: fmt(hoje) };
   }
   if (id === '30d') {
-    // Mes anterior fechado
     const m = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const u = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
     return { desde: fmt(m), ate: fmt(u) };
   }
   if (id === 'trimestre') {
-    // Inicio do trimestre atual: jan/abr/jul/out
     const trimMes = Math.floor(hoje.getMonth() / 3) * 3;
     const d = new Date(hoje.getFullYear(), trimMes, 1);
     return { desde: fmt(d), ate: fmt(hoje) };
@@ -87,12 +84,6 @@ export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string 
   return {};
 }
 
-/**
- * Calcula o periodo equivalente anterior pra comparacao temporal.
- * Ex: "Este mes" -> mes anterior (mesmo intervalo de dias).
- *     "7 dias" -> 7 dias antes desses 7.
- *     "Tudo" -> nada (nao da pra comparar).
- */
 export function intervaloAnterior(id: PeriodoId): { desde?: string; ate?: string } {
   const hoje = new Date();
   const fmt = fmtData;
@@ -100,13 +91,11 @@ export function intervaloAnterior(id: PeriodoId): { desde?: string; ate?: string
   if (id === 'tudo' || id === 'personalizado') return {};
 
   if (id === 'mes') {
-    // Mes anterior, mesmo dia inicial ate dia atual (ex: 1-15 -> mes passado 1-15)
     const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const fim = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
     return { desde: fmt(ini), ate: fmt(fim) };
   }
   if (id === '30d') {
-    // Mes anterior do mes anterior (mes -2 fechado)
     const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
     const fim = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 0);
     return { desde: fmt(ini), ate: fmt(fim) };
@@ -118,7 +107,6 @@ export function intervaloAnterior(id: PeriodoId): { desde?: string; ate?: string
     return { desde: fmt(ini), ate: fmt(fim) };
   }
 
-  // Pra outros: pega duracao do intervalo atual e desloca pra tras
   const atual = intervaloPeriodo(id);
   if (!atual.desde || !atual.ate) return {};
   const ini = new Date(atual.desde + 'T00:00:00');
@@ -131,17 +119,24 @@ export function intervaloAnterior(id: PeriodoId): { desde?: string; ate?: string
   return { desde: fmt(novoIni), ate: fmt(novoFim) };
 }
 
-interface UseFiltrosReturn {
+interface FiltrosContextValue {
   unidadeId: number;
   periodoId: PeriodoId;
   setUnidadeId: (id: number) => void;
   setPeriodoId: (id: PeriodoId) => void;
   intervalo: { desde?: string; ate?: string };
   intervaloAnt: { desde?: string; ate?: string };
-  pronto: boolean; // aguarda hidratar do localStorage antes de fazer fetch
+  pronto: boolean;
 }
 
-export function useFiltros(periodoDefault: PeriodoId = 'mes'): UseFiltrosReturn {
+const FiltrosContext = createContext<FiltrosContextValue | null>(null);
+
+interface ProviderProps {
+  children: ReactNode;
+  periodoDefault?: PeriodoId;
+}
+
+export function FiltrosProvider({ children, periodoDefault = 'mes' }: ProviderProps) {
   const [unidadeId, setUnidadeIdState] = useState(1);
   const [periodoId, setPeriodoIdState] = useState<PeriodoId>(periodoDefault);
   const [pronto, setPronto] = useState(false);
@@ -186,5 +181,31 @@ export function useFiltros(periodoDefault: PeriodoId = 'mes'): UseFiltrosReturn 
   const intervalo = intervaloPeriodo(periodoId);
   const intervaloAnt = intervaloAnterior(periodoId);
 
-  return { unidadeId, periodoId, setUnidadeId, setPeriodoId, intervalo, intervaloAnt, pronto };
+  const value: FiltrosContextValue = {
+    unidadeId,
+    periodoId,
+    setUnidadeId,
+    setPeriodoId,
+    intervalo,
+    intervaloAnt,
+    pronto,
+  };
+
+  return createElement(FiltrosContext.Provider, { value }, children);
+}
+
+/**
+ * Hook que consome os filtros compartilhados via Context.
+ * Mudancas em qualquer ponto (Navbar ou tela) propagam pra todos.
+ *
+ * O parametro periodoDefault eh aceito por compatibilidade com codigo
+ * antigo, mas sera ignorado — o default real eh definido no Provider
+ * (em layout.tsx).
+ */
+export function useFiltros(_periodoDefault?: PeriodoId): FiltrosContextValue {
+  const ctx = useContext(FiltrosContext);
+  if (!ctx) {
+    throw new Error('useFiltros precisa estar dentro de <FiltrosProvider>');
+  }
+  return ctx;
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
+import { FiltrosProvider } from "./components/useFiltros";
 
 export const dynamic = 'force-dynamic';
 
@@ -44,8 +45,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="min-h-full flex flex-col">
-        <Navbar />
-        {children}
+        <FiltrosProvider>
+          <Navbar />
+          {children}
+        </FiltrosProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `
