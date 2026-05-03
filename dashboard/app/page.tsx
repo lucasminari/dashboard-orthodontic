@@ -7,8 +7,16 @@ type Dados = {
   funil: { leads: number; agendados: number; compareceram: number; fecharam: number; pagaram: number };
   financeiro: { receita_realizada: number; pipeline_futuro: number };
 };
-type Origem = { origem: string; leads: number; fecharam: number; taxa_conversao: number };
-type ROIOrigem = { origem: string; leads: number; fecharam: number; receita: number; taxa_conversao: number };
+type FunilOrigem = {
+  origem: string;
+  fonte: 'kommo' | 'sistema';
+  cadastrados: number;
+  agendados: number;
+  compareceram: number;
+  fecharam: number;
+  pagaram: number;
+  receita: number;
+};
 type Lembrete = {
   id: number; nome: string; telefone: string; valor: number;
   data_vcto: string; dias_para_vencer: number;
@@ -63,8 +71,7 @@ export default function Home() {
   const [desdePersonalizado, setDesdePersonalizado] = useState('');
   const [atePersonalizado, setAtePersonalizado] = useState('');
   const [dados, setDados] = useState<Dados | null>(null);
-  const [origens, setOrigens] = useState<Origem[] | null>(null);
-  const [roiOrigem, setRoiOrigem] = useState<ROIOrigem[] | null>(null);
+  const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
   const [comparativo, setComparativo] = useState<ComparativoUnidade[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -83,21 +90,26 @@ export default function Home() {
     if (intervalo.ate)   params.set('ate', intervalo.ate);
     const q = params.toString() ? `?${params.toString()}` : '';
 
+    // /api/funil-completo usa nomes de params diferentes
+    const paramsFunil = new URLSearchParams();
+    if (uId) paramsFunil.set('unidade_id', String(uId));
+    if (intervalo.desde) paramsFunil.set('data_inicio', intervalo.desde);
+    if (intervalo.ate) paramsFunil.set('data_fim', intervalo.ate);
+    const qFunil = paramsFunil.toString() ? `?${paramsFunil.toString()}` : '';
+
     try {
-      const [d, o, r, l, c] = await Promise.all([
+      const [d, f, l, c] = await Promise.all([
         fetch(`/api/kpis${q}`).then(res => res.json()),
-        fetch(`/api/origens${q}`).then(res => res.json()),
-        fetch(`/api/roi-origem${q}`).then(res => res.json()),
+        fetch(`/api/funil-completo${qFunil}`).then(res => res.json()),
         fetch(`/api/lembretes${uId ? `?unidade=${uId}` : ''}`).then(res => res.json()),
         fetch(`/api/comparativo`).then(res => res.json()),
       ]);
       if (d.erro) throw new Error(d.erro);
-      if (o.erro) throw new Error(o.erro);
+      if (f.error) throw new Error(f.error);
       if (l.erro) throw new Error(l.erro);
       if (c.erro) throw new Error(c.erro);
       setDados(d);
-      setOrigens(o.origens);
-      setRoiOrigem(r.origens);
+      setFunilOrigens(f.funis);
       setLembretes(l.lembretes);
       setComparativo(c.unidades);
     } catch (e: any) {
@@ -192,7 +204,7 @@ export default function Home() {
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
 
-      {!dados || !origens || !roiOrigem || !lembretes || !comparativo ? (
+      {!dados || !funilOrigens || !lembretes || !comparativo ? (
         <div className="text-gray-400">Carregando...</div>
       ) : (
         <>
@@ -208,10 +220,10 @@ export default function Home() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <Funil dados={dados} unidadeId={unidadeId} />
-            <Origens origens={origens} unidadeId={unidadeId} />
+            <Origens origens={funilOrigens} unidadeId={unidadeId} />
           </div>
 
-          <ROIOrigem roiOrigem={roiOrigem} fmtBR={fmtBR} unidadeId={unidadeId} />
+          <ROIOrigem origens={funilOrigens} fmtBR={fmtBR} unidadeId={unidadeId} />
 
           <Lembretes
             lembretes={lembretes}
@@ -343,34 +355,49 @@ function Funil({ dados, unidadeId }: { dados: Dados; unidadeId?: number }) {
   );
 }
 
-function Origens({ origens, unidadeId }: { origens: Origem[]; unidadeId?: number }) {
-  const max = Math.max(...origens.map(o => o.leads), 1);
+function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: number }) {
+  // So mostra origens que tem ao menos 1 cadastro no periodo.
+  const ativas = origens.filter(o => o.cadastrados > 0);
+  const max = Math.max(...ativas.map(o => o.cadastrados), 1);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex items-start justify-between mb-1">
         <h2 className="text-lg font-semibold">Leads por origem</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
-      <p className="text-xs text-gray-500 mb-6">Fonte: Kommo · cruzado com OrthoDontic</p>
-      {origens.length === 0 ? (
+      <p className="text-xs text-gray-500 mb-6">Kommo + sistema Orthodontic, com origens unificadas</p>
+      {ativas.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem registrada para esta combinação de filtros.</div>
       ) : (
         <div className="space-y-3">
-          {origens.map(o => {
-            const pct = (o.leads / max) * 100;
+          {ativas.map(o => {
+            const pct = (o.cadastrados / max) * 100;
+            const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
+            const corBarra = o.fonte === 'kommo' ? 'bg-indigo-500' : 'bg-emerald-500';
             return (
               <div key={o.origem}>
                 <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-300 capitalize">{o.origem}</span>
+                  <span className="text-gray-300 flex items-center gap-1.5">
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                        o.fonte === 'kommo' ? 'bg-indigo-900/60 text-indigo-300' : 'bg-emerald-900/60 text-emerald-300'
+                      }`}
+                    >
+                      {o.fonte}
+                    </span>
+                    {o.origem}
+                  </span>
                   <span className="text-gray-400">
-                    {o.leads.toLocaleString('pt-BR')} leads
+                    {o.cadastrados.toLocaleString('pt-BR')} leads
                     {o.fecharam > 0 && (
-                      <span className="ml-2 text-emerald-400">· {o.fecharam} fech ({o.taxa_conversao.toFixed(1)}%)</span>
+                      <span className="ml-2 text-emerald-400">
+                        · {o.fecharam} fech ({taxa.toFixed(1)}%)
+                      </span>
                     )}
                   </span>
                 </div>
                 <div className="bg-gray-800 rounded h-2 overflow-hidden">
-                  <div className="h-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                  <div className={`h-full ${corBarra}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
@@ -438,21 +465,34 @@ function Lembretes({
   );
 }
 
-function ROIOrigem({ roiOrigem, fmtBR, unidadeId }: { roiOrigem: ROIOrigem[]; fmtBR: (n: number) => string; unidadeId?: number }) {
+function ROIOrigem({
+  origens,
+  fmtBR,
+  unidadeId,
+}: {
+  origens: FunilOrigem[];
+  fmtBR: (n: number) => string;
+  unidadeId?: number;
+}) {
+  // Mostra so origens com receita > 0 ou pelo menos 1 fechamento, ordenadas por receita.
+  const comReceita = origens
+    .filter(o => o.receita > 0 || o.fecharam > 0)
+    .sort((a, b) => b.receita - a.receita);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
       <div className="flex items-start justify-between mb-1">
         <h2 className="text-lg font-semibold">Receita por origem</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
-      <p className="text-xs text-gray-500 mb-6">Leads do Kommo cruzados com OrthoDontic</p>
-      {roiOrigem.length === 0 ? (
+      <p className="text-xs text-gray-500 mb-6">Kommo + sistema Orthodontic, com origens unificadas</p>
+      {comReceita.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
       ) : (
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 uppercase">
             <tr className="border-b border-gray-800">
               <th className="text-left py-2 font-normal">Origem</th>
+              <th className="text-left py-2 font-normal">Fonte</th>
               <th className="text-right py-2 font-normal">Leads</th>
               <th className="text-right py-2 font-normal">Fecharam</th>
               <th className="text-right py-2 font-normal">Taxa</th>
@@ -460,15 +500,31 @@ function ROIOrigem({ roiOrigem, fmtBR, unidadeId }: { roiOrigem: ROIOrigem[]; fm
             </tr>
           </thead>
           <tbody>
-            {roiOrigem.map(r => (
-              <tr key={r.origem} className="border-b border-gray-800 hover:bg-gray-800/30">
-                <td className="py-3 capitalize">{r.origem}</td>
-                <td className="py-3 text-right text-gray-300">{r.leads.toLocaleString('pt-BR')}</td>
-                <td className="py-3 text-right text-emerald-400 font-semibold">{r.fecharam.toLocaleString('pt-BR')}</td>
-                <td className="py-3 text-right text-gray-400">{r.taxa_conversao}%</td>
-                <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
-              </tr>
-            ))}
+            {comReceita.map(r => {
+              const taxa = r.cadastrados > 0 ? (r.fecharam / r.cadastrados) * 100 : 0;
+              return (
+                <tr key={r.origem} className="border-b border-gray-800 hover:bg-gray-800/30">
+                  <td className="py-3">{r.origem}</td>
+                  <td className="py-3">
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                        r.fonte === 'kommo'
+                          ? 'bg-indigo-900/60 text-indigo-300'
+                          : 'bg-emerald-900/60 text-emerald-300'
+                      }`}
+                    >
+                      {r.fonte}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right text-gray-300">{r.cadastrados.toLocaleString('pt-BR')}</td>
+                  <td className="py-3 text-right text-emerald-400 font-semibold">
+                    {r.fecharam.toLocaleString('pt-BR')}
+                  </td>
+                  <td className="py-3 text-right text-gray-400">{taxa.toFixed(0)}%</td>
+                  <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}

@@ -15,6 +15,7 @@ interface EtapasFunil {
   compareceram: number;
   fecharam: number;
   pagaram: number;
+  receita: number;
 }
 
 interface FunilOrigem extends EtapasFunil {
@@ -38,6 +39,7 @@ interface AcumuladorOrigem {
   compareceram: Set<string>;
   fecharam: Set<string>;
   pagaram: Set<string>;
+  receita: number; // soma vlr_contrato dos contratos pagos
 }
 
 function novoAcumulador(): AcumuladorOrigem {
@@ -47,6 +49,7 @@ function novoAcumulador(): AcumuladorOrigem {
     compareceram: new Set(),
     fecharam: new Set(),
     pagaram: new Set(),
+    receita: 0,
   };
 }
 
@@ -96,7 +99,7 @@ export async function GET(request: NextRequest) {
     let qSis = supabase
       .from('raw_sistema')
       .select(
-        'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id',
+        'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, vlr_contrato, unidade_id',
       );
     if (unidadeId) qSis = qSis.eq('unidade_id', unidadeId);
     const { data: sistemaRows, error: errSis } = await qSis;
@@ -168,6 +171,10 @@ export async function GET(request: NextRequest) {
         a.fecharam.add(k);
       }
       if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
+        if (!a.pagaram.has(k)) {
+          // soma receita apenas na primeira vez que paciente eh contado
+          a.receita += Number(r.vlr_contrato) || 0;
+        }
         a.pagaram.add(k);
       }
     }
@@ -222,6 +229,7 @@ export async function GET(request: NextRequest) {
         compareceram,
         fecharam,
         pagaram,
+        receita: a.receita,
         taxa_cadastro_para_agendamento: ratio(agendados, cadastrados),
         taxa_agendamento_para_comparecimento: ratio(compareceram, agendados),
         taxa_comparecimento_para_fechamento: ratio(fecharam, compareceram),
@@ -248,8 +256,9 @@ export async function GET(request: NextRequest) {
         compareceram: acc.compareceram + f.compareceram,
         fecharam: acc.fecharam + f.fecharam,
         pagaram: acc.pagaram + f.pagaram,
+        receita: acc.receita + f.receita,
       }),
-      { cadastrados: 0, agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0 },
+      { cadastrados: 0, agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
     );
 
     return NextResponse.json({
