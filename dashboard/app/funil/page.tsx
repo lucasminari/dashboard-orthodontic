@@ -72,7 +72,7 @@ function fmtPct(v: number | null): string {
 
 export default function FunilPage() {
   const [unidadeId, setUnidadeId] = useState(0);
-  const [periodoId, setPeriodoId] = useState('tudo');
+  const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -163,6 +163,15 @@ export default function FunilPage() {
 
         {!carregando && !erro && dados && (
           <>
+            {periodoId === 'tudo' && (
+              <div className="mb-6 bg-amber-950/30 border border-amber-800/50 text-amber-200 rounded-lg p-3 text-xs">
+                ⚠️ <strong>Sem filtro de data:</strong> a Kommo é usada há poucos meses, mas o sistema Orthodontic
+                tem leads antigos. Por isso pode aparecer "agendados &gt; cadastrados" — leads antigos com a mesma
+                origem agendam mas não estão na Kommo. Use um período recente (este mês, mês anterior) pra
+                números mais coerentes.
+              </div>
+            )}
+
             {/* Cards Total */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
               <Card titulo="Cadastrados" valor={total?.cadastrados || 0} cor="blue" />
