@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { AtualizadoEm } from './components/AtualizadoEm';
 
 type Dados = {
@@ -355,12 +355,63 @@ function Funil({ dados, unidadeId }: { dados: Dados; unidadeId?: number }) {
   );
 }
 
-function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: number }) {
-  // So mostra origens que tem ao menos 1 cadastro no periodo, ordenadas por leads desc.
-  const ativas = origens
-    .filter(o => o.cadastrados > 0)
+// Constantes de classificacao de origens.
+// 'kommo' (5 origens campanhas pagas) sao SEMPRE principais.
+// Do sistema, as TOP_SISTEMA_PRINCIPAIS por leads ficam destacadas; resto vai pra "Outros".
+const TOP_SISTEMA_PRINCIPAIS = 5;
+
+function classificarOrigens(origens: FunilOrigem[]) {
+  const ativas = origens.filter(o => o.cadastrados > 0);
+  const kommo = ativas.filter(o => o.fonte === 'kommo');
+  const sistemaOrdenado = ativas
+    .filter(o => o.fonte === 'sistema')
     .sort((a, b) => b.cadastrados - a.cadastrados);
-  const max = Math.max(...ativas.map(o => o.cadastrados), 1);
+  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
+  const sistemaOutros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
+
+  // Principais ficam ordenados por cadastrados desc juntos
+  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.cadastrados - a.cadastrados);
+
+  return { principais, outros: sistemaOutros };
+}
+
+function agregarOutros(outros: FunilOrigem[]): FunilOrigem | null {
+  if (outros.length === 0) return null;
+  return outros.reduce(
+    (acc, o) => ({
+      origem: 'Outros',
+      fonte: 'sistema',
+      cadastrados: acc.cadastrados + o.cadastrados,
+      agendados: acc.agendados + o.agendados,
+      compareceram: acc.compareceram + o.compareceram,
+      fecharam: acc.fecharam + o.fecharam,
+      pagaram: acc.pagaram + o.pagaram,
+      receita: acc.receita + o.receita,
+    }),
+    {
+      origem: 'Outros',
+      fonte: 'sistema' as const,
+      cadastrados: 0,
+      agendados: 0,
+      compareceram: 0,
+      fecharam: 0,
+      pagaram: 0,
+      receita: 0,
+    },
+  );
+}
+
+function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: number }) {
+  const [outrosAberto, setOutrosAberto] = useState(false);
+  const { principais, outros } = classificarOrigens(origens);
+  const outrosAgregado = agregarOutros(outros);
+
+  // Linhas a renderizar: principais + linha Outros (se existir)
+  const linhas: FunilOrigem[] = [...principais];
+  if (outrosAgregado) linhas.push(outrosAgregado);
+
+  const max = Math.max(...linhas.map(o => o.cadastrados), 1);
+
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex items-start justify-between mb-1">
@@ -368,17 +419,27 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
       <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
-      {ativas.length === 0 ? (
+      {linhas.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem registrada para esta combinação de filtros.</div>
       ) : (
         <div className="space-y-3">
-          {ativas.map(o => {
+          {linhas.map(o => {
+            const isOutros = o.origem === 'Outros';
             const pct = (o.cadastrados / max) * 100;
             const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
             return (
               <div key={o.origem}>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-300">{o.origem}</span>
+                <div
+                  className={`flex items-center justify-between text-sm mb-1 ${isOutros ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
+                >
+                  <span className={`flex items-center gap-1 ${isOutros ? 'text-gray-200 font-medium' : 'text-gray-300'}`}>
+                    {isOutros && (
+                      <span className="text-xs text-gray-500 w-3">{outrosAberto ? '▼' : '▶'}</span>
+                    )}
+                    {o.origem}
+                    {isOutros && <span className="text-xs text-gray-500">({outros.length})</span>}
+                  </span>
                   <span className="text-gray-400">
                     {o.cadastrados.toLocaleString('pt-BR')} leads
                     {o.fecharam > 0 && (
@@ -389,8 +450,32 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                   </span>
                 </div>
                 <div className="bg-gray-800 rounded h-2 overflow-hidden">
-                  <div className="h-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                  <div
+                    className={`h-full ${isOutros ? 'bg-gray-500' : 'bg-indigo-500'}`}
+                    style={{ width: `${pct}%` }}
+                  />
                 </div>
+                {/* Detalhamento expandido de Outros */}
+                {isOutros && outrosAberto && (
+                  <div className="mt-3 ml-4 pl-3 border-l border-gray-800 space-y-2">
+                    {outros.map(sub => {
+                      const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
+                      return (
+                        <div key={sub.origem} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">{sub.origem}</span>
+                          <span className="text-gray-500">
+                            {sub.cadastrados.toLocaleString('pt-BR')} leads
+                            {sub.fecharam > 0 && (
+                              <span className="ml-2 text-emerald-500">
+                                · {sub.fecharam} ({subTaxa.toFixed(0)}%)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -466,10 +551,23 @@ function ROIOrigem({
   fmtBR: (n: number) => string;
   unidadeId?: number;
 }) {
-  // Mostra so origens com receita > 0 ou pelo menos 1 fechamento, ordenadas por receita.
-  const comReceita = origens
-    .filter(o => o.receita > 0 || o.fecharam > 0)
+  const [outrosAberto, setOutrosAberto] = useState(false);
+  const comReceita = origens.filter(o => o.receita > 0 || o.fecharam > 0);
+
+  // Aplica mesma classificacao: Kommo sempre + top N do sistema por receita; resto vai pra Outros.
+  const kommo = comReceita
+    .filter(o => o.fonte === 'kommo')
     .sort((a, b) => b.receita - a.receita);
+  const sistemaOrdenado = comReceita
+    .filter(o => o.fonte === 'sistema')
+    .sort((a, b) => b.receita - a.receita);
+  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
+  const outros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
+  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.receita - a.receita);
+  const outrosAgregado = agregarOutros(outros);
+  const linhas: FunilOrigem[] = [...principais];
+  if (outrosAgregado) linhas.push(outrosAgregado);
+
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
       <div className="flex items-start justify-between mb-1">
@@ -477,7 +575,7 @@ function ROIOrigem({
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
       <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
-      {comReceita.length === 0 ? (
+      {linhas.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
       ) : (
         <table className="w-full text-sm">
@@ -491,18 +589,42 @@ function ROIOrigem({
             </tr>
           </thead>
           <tbody>
-            {comReceita.map(r => {
+            {linhas.map(r => {
+              const isOutros = r.origem === 'Outros';
               const taxa = r.cadastrados > 0 ? (r.fecharam / r.cadastrados) * 100 : 0;
               return (
-                <tr key={r.origem} className="border-b border-gray-800 hover:bg-gray-800/30">
-                  <td className="py-3">{r.origem}</td>
-                  <td className="py-3 text-right text-gray-300">{r.cadastrados.toLocaleString('pt-BR')}</td>
-                  <td className="py-3 text-right text-emerald-400 font-semibold">
-                    {r.fecharam.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="py-3 text-right text-gray-400">{taxa.toFixed(0)}%</td>
-                  <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
-                </tr>
+                <Fragment key={r.origem}>
+                  <tr
+                    className={`border-b border-gray-800 hover:bg-gray-800/30 ${isOutros ? 'cursor-pointer' : ''}`}
+                    onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
+                  >
+                    <td className={`py-3 ${isOutros ? 'font-medium text-gray-200' : ''}`}>
+                      {isOutros && (
+                        <span className="text-xs text-gray-500 mr-1">{outrosAberto ? '▼' : '▶'}</span>
+                      )}
+                      {r.origem}
+                      {isOutros && <span className="ml-1 text-xs text-gray-500">({outros.length})</span>}
+                    </td>
+                    <td className="py-3 text-right text-gray-300">{r.cadastrados.toLocaleString('pt-BR')}</td>
+                    <td className="py-3 text-right text-emerald-400 font-semibold">
+                      {r.fecharam.toLocaleString('pt-BR')}
+                    </td>
+                    <td className="py-3 text-right text-gray-400">{taxa.toFixed(0)}%</td>
+                    <td className="py-3 text-right font-semibold text-emerald-400">R$ {fmtBR(r.receita)}</td>
+                  </tr>
+                  {isOutros && outrosAberto && outros.map(sub => {
+                    const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
+                    return (
+                      <tr key={`sub-${sub.origem}`} className="border-b border-gray-800/50 bg-gray-950/50">
+                        <td className="py-2 pl-6 text-xs text-gray-400">{sub.origem}</td>
+                        <td className="py-2 text-right text-xs text-gray-500">{sub.cadastrados.toLocaleString('pt-BR')}</td>
+                        <td className="py-2 text-right text-xs text-emerald-500">{sub.fecharam.toLocaleString('pt-BR')}</td>
+                        <td className="py-2 text-right text-xs text-gray-500">{subTaxa.toFixed(0)}%</td>
+                        <td className="py-2 text-right text-xs text-emerald-500">R$ {fmtBR(sub.receita)}</td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
               );
             })}
           </tbody>

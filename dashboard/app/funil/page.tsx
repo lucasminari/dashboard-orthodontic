@@ -1,7 +1,44 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { AtualizadoEm } from '../components/AtualizadoEm';
+
+const TOP_SISTEMA_PRINCIPAIS = 5;
+
+function classificarFunis(funis: FunilOrigem[]): { principais: FunilOrigem[]; outros: FunilOrigem[] } {
+  const ativas = funis.filter(f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0);
+  const kommo = ativas.filter(f => f.fonte === 'kommo');
+  const sistemaOrdenado = ativas.filter(f => f.fonte === 'sistema').sort((a, b) => b.cadastrados - a.cadastrados);
+  const sistemaPrincipais = sistemaOrdenado.slice(0, TOP_SISTEMA_PRINCIPAIS);
+  const outros = sistemaOrdenado.slice(TOP_SISTEMA_PRINCIPAIS);
+  const principais = [...kommo, ...sistemaPrincipais].sort((a, b) => b.cadastrados - a.cadastrados);
+  return { principais, outros };
+}
+
+function agregarFunis(funis: FunilOrigem[]): FunilOrigem | null {
+  if (funis.length === 0) return null;
+  const totais = funis.reduce(
+    (acc, f) => ({
+      cadastrados: acc.cadastrados + f.cadastrados,
+      agendados: acc.agendados + f.agendados,
+      compareceram: acc.compareceram + f.compareceram,
+      fecharam: acc.fecharam + f.fecharam,
+      pagaram: acc.pagaram + f.pagaram,
+      receita: acc.receita + f.receita,
+    }),
+    { cadastrados: 0, agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
+  );
+  const ratio = (n: number, d: number) => (d ? n / d : null);
+  return {
+    origem: 'Outros',
+    fonte: 'sistema',
+    ...totais,
+    taxa_cadastro_para_agendamento: ratio(totais.agendados, totais.cadastrados),
+    taxa_agendamento_para_comparecimento: ratio(totais.compareceram, totais.agendados),
+    taxa_comparecimento_para_fechamento: ratio(totais.fecharam, totais.compareceram),
+    taxa_fechamento_para_pagamento: ratio(totais.pagaram, totais.fecharam),
+  };
+}
 
 type FunilOrigem = {
   origem: string;
@@ -11,6 +48,7 @@ type FunilOrigem = {
   compareceram: number;
   fecharam: number;
   pagaram: number;
+  receita: number;
   taxa_cadastro_para_agendamento: number | null;
   taxa_agendamento_para_comparecimento: number | null;
   taxa_comparecimento_para_fechamento: number | null;
@@ -234,7 +272,14 @@ function Section({
   tiposAtualizacao?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
   unidadeId?: number;
 }) {
+  const [outrosAberto, setOutrosAberto] = useState(false);
   if (funis.length === 0) return null;
+
+  const { principais, outros } = classificarFunis(funis);
+  const outrosAgregado = agregarFunis(outros);
+  const linhas: FunilOrigem[] = [...principais];
+  if (outrosAgregado) linhas.push(outrosAgregado);
+
   return (
     <section className="mb-10">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -265,33 +310,58 @@ function Section({
               </tr>
             </thead>
             <tbody>
-              {funis.map((f, i) => (
-                <tr
-                  key={f.origem}
-                  className={`border-t border-gray-800 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-900/50'}`}
-                >
-                  <td className="px-4 py-3 font-medium">{f.origem}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{f.cadastrados}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                    {fmtPct(f.taxa_cadastro_para_agendamento)}
-                  </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{f.agendados}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                    {fmtPct(f.taxa_agendamento_para_comparecimento)}
-                  </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{f.compareceram}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                    {fmtPct(f.taxa_comparecimento_para_fechamento)}
-                  </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{f.fecharam}</td>
-                  <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
-                    {fmtPct(f.taxa_fechamento_para_pagamento)}
-                  </td>
-                  <td className="px-3 py-3 text-right tabular-nums font-semibold text-emerald-300">
-                    {f.pagaram}
-                  </td>
-                </tr>
-              ))}
+              {linhas.map((f, i) => {
+                const isOutros = f.origem === 'Outros';
+                return (
+                  <Fragment key={f.origem}>
+                    <tr
+                      className={`border-t border-gray-800 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-900/50'} ${isOutros ? 'cursor-pointer hover:bg-gray-800/50' : ''}`}
+                      onClick={isOutros ? () => setOutrosAberto(v => !v) : undefined}
+                    >
+                      <td className={`px-4 py-3 ${isOutros ? 'font-semibold text-gray-200' : 'font-medium'}`}>
+                        {isOutros && (
+                          <span className="text-xs text-gray-500 mr-1">{outrosAberto ? '▼' : '▶'}</span>
+                        )}
+                        {f.origem}
+                        {isOutros && <span className="ml-1 text-xs text-gray-500">({outros.length})</span>}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{f.cadastrados}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
+                        {fmtPct(f.taxa_cadastro_para_agendamento)}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{f.agendados}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
+                        {fmtPct(f.taxa_agendamento_para_comparecimento)}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{f.compareceram}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
+                        {fmtPct(f.taxa_comparecimento_para_fechamento)}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{f.fecharam}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-blue-300 text-xs">
+                        {fmtPct(f.taxa_fechamento_para_pagamento)}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums font-semibold text-emerald-300">
+                        {f.pagaram}
+                      </td>
+                    </tr>
+                    {isOutros && outrosAberto && outros.map(sub => (
+                      <tr key={`sub-${sub.origem}`} className="border-t border-gray-800/50 bg-gray-950/40">
+                        <td className="px-4 py-2 pl-10 text-xs text-gray-400">{sub.origem}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.cadastrados}</td>
+                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_cadastro_para_agendamento)}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.agendados}</td>
+                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_agendamento_para_comparecimento)}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.compareceram}</td>
+                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_comparecimento_para_fechamento)}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 tabular-nums">{sub.fecharam}</td>
+                        <td className="px-3 py-2 text-right text-xs text-blue-400/70 tabular-nums">{fmtPct(sub.taxa_fechamento_para_pagamento)}</td>
+                        <td className="px-3 py-2 text-right text-xs text-emerald-400 tabular-nums">{sub.pagaram}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
