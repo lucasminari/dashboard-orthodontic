@@ -4,14 +4,13 @@ import { processarArquivos } from '@/lib/parsers';
 export const dynamic = 'force-dynamic';
 
 // 'leads' é opcional desde a remoção da etapa "Cadastrados" — só usado
-// historicamente. Os 3 tipos abaixo sao obrigatorios.
-const TIPOS_OBRIGATORIOS = ['sistema', 'performance', 'campanhas'];
-const TIPOS_ACEITOS = ['leads', 'sistema', 'performance', 'campanhas'];
+// historicamente. Os 2 tipos abaixo sao obrigatorios.
+const TIPOS_OBRIGATORIOS = ['sistema', 'performance'];
+const TIPOS_ACEITOS = ['leads', 'sistema', 'performance'];
 const EXTENSOES_VALIDAS: Record<string, string[]> = {
   leads: ['xlsx'],
   sistema: ['xlsx'],
   performance: ['csv', 'xlsx'],
-  campanhas: ['xlsx'],
 };
 
 function extrairTipo(filename: string): string | null {
@@ -19,7 +18,6 @@ function extrairTipo(filename: string): string | null {
   if (lower.includes('leads')) return 'leads';
   if (lower.includes('sistema') || lower.includes('contrato')) return 'sistema';
   if (lower.includes('performance')) return 'performance';
-  if (lower.includes('campanha') || lower.includes('campaign')) return 'campanhas';
   return null;
 }
 
@@ -57,14 +55,14 @@ export async function POST(request: NextRequest) {
 
         if (!tipo) {
           return NextResponse.json(
-            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'sistema', 'performance' ou 'campanhas' no nome.` },
+            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'sistema' ou 'performance' no nome.` },
             { status: 400 },
           );
         }
 
         if (!TIPOS_ACEITOS.includes(tipo)) {
           return NextResponse.json(
-            { error: `Tipo inválido: ${tipo}. Esperado: sistema, performance ou campanhas` },
+            { error: `Tipo inválido: ${tipo}. Esperado: sistema ou performance` },
             { status: 400 },
           );
         }
@@ -98,7 +96,6 @@ export async function POST(request: NextRequest) {
         leads: files.leads,
         sistema: files.sistema,
         performance: files.performance,
-        campanhas: files.campanhas,
       },
       dataRelatorio,
       parseInt(unidadeId),

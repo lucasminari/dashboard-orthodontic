@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-type TipoIngestao = 'leads' | 'sistema' | 'performance' | 'campanhas';
+type TipoIngestao = 'leads' | 'sistema' | 'performance';
 
 type RespostaApi = {
   unidade_id: number | null;

@@ -104,7 +104,7 @@ export default function Home() {
           <p className="text-gray-400">OrthoDontic — {unidadeAtual} · {periodoAtual}</p>
           <div className="mt-2">
             <AtualizadoEm
-              tipos={['sistema', 'performance', 'campanhas']}
+              tipos={['sistema', 'performance']}
               unidadeId={unidadeId || undefined}
             />
           </div>
@@ -201,7 +201,7 @@ function Card({
   tooltip?: string;
   moeda?: boolean;
   unidadeId?: number;
-  tipos?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
+  tipos?: ('leads' | 'sistema' | 'performance')[];
 }) {
   const fmt = (n: number) =>
     moeda

@@ -8,7 +8,6 @@ const TIPOS_LABEL: Record<string, string> = {
   leads: 'Leads',
   sistema: 'Sistema (contratos)',
   performance: 'Performance',
-  campanhas: 'Campanhas',
 };
 
 const UNIDADE_MAP: Record<string, { id: number; nome: string }> = {
@@ -47,7 +46,6 @@ const TIPO_COR: Record<string, string> = {
   leads: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/40',
   sistema: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40',
   performance: 'bg-purple-900/40 text-purple-300 border-purple-700/40',
-  campanhas: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/40',
 };
 
 function formatDataHora(d: string | null): string {
@@ -99,7 +97,6 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
     leads: null,
     sistema: null,
     performance: null,
-    campanhas: null,
   });
   const [enviando, setEnviando] = useState(false);
   const [erroUpload, setErroUpload] = useState<string | null>(null);
@@ -207,8 +204,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const enviarArquivos = async () => {
     if (!unidadeId) return;
-    // 3 obrigatorios: sistema, performance, campanhas. Leads é opcional.
-    const obrigatorios = ['sistema', 'performance', 'campanhas'];
+    // 2 obrigatorios: sistema, performance. Leads é opcional.
+    const obrigatorios = ['sistema', 'performance'];
     const faltando = obrigatorios.filter(t => !arquivos[t]);
     if (faltando.length > 0) {
       setErroUpload(`Faltam arquivos: ${faltando.join(', ')}`);
@@ -238,7 +235,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
       if (res.status === 200 && data.success === true) {
         // Sucesso real do servidor
         setSucessoUpload(true);
-        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
+        setArquivos({ leads: null, sistema: null, performance: null });
         setTimeout(() => {
           carregar();
           setSucessoUpload(false);
@@ -247,7 +244,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
       } else if (res.status === 202 && data.queued === true) {
         // Enfileirado pelo Service Worker (offline)
         setErroUpload('⏳ Sem conexão. Arquivos salvos localmente — vão ser enviados quando voltar online.');
-        setArquivos({ leads: null, sistema: null, performance: null, campanhas: null });
+        setArquivos({ leads: null, sistema: null, performance: null });
         setEnviando(false);
       } else {
         // Erro real do servidor
@@ -262,7 +259,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const processarArquivos = (files: FileList) => {
     const novoEstado = { ...arquivos };
-    const tipos = ['leads', 'sistema', 'performance', 'campanhas'];
+    const tipos = ['leads', 'sistema', 'performance'];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const nome = file.name.toLowerCase();
@@ -403,7 +400,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <div className="space-y-2">
                 <div className="text-sm font-medium text-gray-300 mb-3">Arquivos selecionados:</div>
-                {['sistema', 'performance', 'campanhas'].map(tipo => (
+                {['sistema', 'performance'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-2 text-sm">
                     <div className={`w-4 h-4 rounded border ${arquivos[tipo] ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}>
                       {arquivos[tipo] && <div className="text-white text-xs flex items-center justify-center h-full">✓</div>}
@@ -432,7 +429,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <button
                 onClick={enviarArquivos}
-                disabled={enviando || !arquivos.sistema || !arquivos.performance || !arquivos.campanhas}
+                disabled={enviando || !arquivos.sistema || !arquivos.performance}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg transition"
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
@@ -617,29 +614,12 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                   </div>
                 </div>
 
-                <div className="border-l-2 border-green-500 pl-4 py-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-green-100">3️⃣ Campanhas</div>
-                    <a
-                      href="https://franquias.orthodonticbrasil.com/comercial_relatorio_campanha"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white font-medium transition"
-                    >
-                      Abrir Relatório →
-                    </a>
-                  </div>
-                  <div className="text-gray-400 text-xs space-y-1 mb-2">
-                    <p><strong>Filtro:</strong> Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> clique em Exportar → baixe diretamente (sem renomear)</p>
-                  </div>
-                </div>
               </div>
 
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-2"><strong>Após exportar os 3 arquivos:</strong></p>
+                <p className="text-xs text-gray-400 mb-2"><strong>Após exportar os 2 arquivos:</strong></p>
                 <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-                  <li>Use a seção <strong>Upload de Arquivos</strong> acima para enviar os 3 arquivos</li>
+                  <li>Use a seção <strong>Upload de Arquivos</strong> acima para enviar os 2 arquivos</li>
                   <li>Os dados serão processados automaticamente e o dashboard atualizará em poucos segundos</li>
                 </ol>
               </div>

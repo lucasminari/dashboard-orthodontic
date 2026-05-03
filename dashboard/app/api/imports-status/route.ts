@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const TIPOS = ['leads', 'sistema', 'performance', 'campanhas'];
+const TIPOS = ['leads', 'sistema', 'performance'];
 
 export async function GET() {
   try {

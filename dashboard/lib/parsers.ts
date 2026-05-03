@@ -378,39 +378,6 @@ async function processarPerformance(
   return registros.length;
 }
 
-async function processarCampanhas(
-  file: File,
-  dataRelatorio: string,
-  unidadeId: number,
-): Promise<number> {
-  const linhas = await lerXLSX(file, 1); // pula primeira linha (cabeçalho mesclado)
-  await apagarIngestoesAnteriores(unidadeId, 'campanhas', dataRelatorio);
-  const ingestaoId = await criarIngestao(unidadeId, 'campanhas', dataRelatorio, file.name);
-
-  const registros = linhas
-    .filter(l => l && (l['Ação'] || l['Origem'] || l['Total Leads']))
-    .map(l => ({
-      unidade_id: unidadeId,
-      data_relatorio: dataRelatorio,
-      campanha: null,
-      acao: l['Ação'] || null,
-      origem: l['Origem'] || null,
-      total_leads: num(l['Total Leads']),
-      interacoes: num(l['Interações']),
-      agendados: num(l['Agendados']),
-      compareceram: num(l['Compareceram']),
-      contratos_fechados: num(l['Contratos Fechados']),
-      contratos_pagos: num(l['Contratos Pagos']),
-      ingestao_id: ingestaoId,
-    }));
-
-  if (registros.length > 0) {
-    await inserirEmLotes('raw_campanhas', registros);
-  }
-  await finalizarIngestao(ingestaoId, registros.length);
-  return registros.length;
-}
-
 // ==================== MAIN ====================
 export async function processarArquivos(
   files: Record<string, File>,
@@ -434,11 +401,6 @@ export async function processarArquivos(
       console.log('[parser] Processando performance:', files.performance.name);
       processed.performance = await processarPerformance(files.performance, dataRelatorio, unidadeId);
       console.log(`[parser] Performance: ${processed.performance} linhas`);
-    }
-    if (files.campanhas) {
-      console.log('[parser] Processando campanhas:', files.campanhas.name);
-      processed.campanhas = await processarCampanhas(files.campanhas, dataRelatorio, unidadeId);
-      console.log(`[parser] Campanhas: ${processed.campanhas} linhas`);
     }
 
     return { success: true, processed };
