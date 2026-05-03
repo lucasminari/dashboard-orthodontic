@@ -96,11 +96,12 @@ export default function ImportPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [agora, setAgora] = useState(new Date());
+  const [removendoId, setRemovendoId] = useState<number | null>(null);
 
-  useEffect(() => {
+  const recarregar = () => {
     Promise.all([
       fetch('/api/imports-status').then(r => r.json()),
-      fetch('/api/imports-historico?limit=20').then(r => r.json()),
+      fetch('/api/imports-historico?limit=50').then(r => r.json()),
     ])
       .then(([statusRes, histRes]) => {
         if (statusRes.erro) setErro(statusRes.erro);
@@ -109,10 +110,38 @@ export default function ImportPage() {
       })
       .catch(e => setErro(e.message))
       .finally(() => setCarregando(false));
+  };
 
+  useEffect(() => {
+    recarregar();
     const t = setInterval(() => setAgora(new Date()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  const removerImportacao = async (h: ImportLog) => {
+    const ok = window.confirm(
+      `Apagar esta importação?\n\n${h.unidade} · ${h.tipo} · ${h.data_relatorio}\n${h.qtd_linhas} linhas (${h.arquivo || 'sem nome'})\n\nIsso vai remover só esses dados específicos. Não dá pra desfazer.`,
+    );
+    if (!ok) return;
+    setRemovendoId(h.id);
+    try {
+      const res = await fetch('/api/limpar-ingestao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingestao_id: h.id, confirmar: true }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        alert(`Erro: ${json.error}`);
+      } else {
+        recarregar();
+      }
+    } catch (e) {
+      alert(`Erro: ${e instanceof Error ? e.message : 'erro'}`);
+    } finally {
+      setRemovendoId(null);
+    }
+  };
 
   const unidadesVisiveis = dados ?? [];
 
@@ -211,6 +240,7 @@ export default function ImportPage() {
                         <th className="text-left px-4 py-2 font-normal">Data referência</th>
                         <th className="text-right px-4 py-2 font-normal">Linhas</th>
                         <th className="text-left px-4 py-2 font-normal">Arquivo</th>
+                        <th className="text-right px-4 py-2 font-normal">Ação</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -233,6 +263,16 @@ export default function ImportPage() {
                           </td>
                           <td className="px-4 py-2 text-xs text-gray-500 truncate max-w-xs" title={h.arquivo || ''}>
                             {h.arquivo || ''}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              onClick={() => removerImportacao(h)}
+                              disabled={removendoId === h.id}
+                              className="text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 px-2 py-1 rounded border border-red-900/40 disabled:opacity-50 transition"
+                              title="Apagar esta importação e os dados associados"
+                            >
+                              {removendoId === h.id ? '...' : 'Remover'}
+                            </button>
                           </td>
                         </tr>
                       ))}

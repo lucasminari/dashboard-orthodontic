@@ -80,6 +80,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
   const [erroUpload, setErroUpload] = useState<string | null>(null);
   const [sucessoUpload, setSucessoUpload] = useState(false);
   const [mostraFilaUploads, setMostraFilaUploads] = useState(false);
+  const [limpando, setLimpando] = useState(false);
+  const [resultadoLimpeza, setResultadoLimpeza] = useState<string | null>(null);
 
   const { queue, isLoading: filaCarregando, retryUpload } = useUploadQueue();
 
@@ -110,6 +112,38 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
     const t = setInterval(() => setAgora(new Date()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  const limparDadosUnidade = async () => {
+    if (!unidadeId) return;
+    const ok = window.confirm(
+      `⚠️ ATENÇÃO\n\nIsso vai apagar TODOS os dados de ${unidadeInfo?.nome} (leads, agendamentos, contratos, pagamentos, telemarketing).\n\nUse só se for reimportar logo em seguida com o histórico completo.\n\nConfirma?`,
+    );
+    if (!ok) return;
+    setLimpando(true);
+    setResultadoLimpeza(null);
+    try {
+      const res = await fetch('/api/limpar-unidade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unidade_id: unidadeId, confirmar: true }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        setResultadoLimpeza(`Erro: ${json.error}`);
+      } else {
+        const totais = json.apagados || {};
+        const linhas = Object.entries(totais)
+          .map(([t, n]) => `${t}: ${n}`)
+          .join(' · ');
+        setResultadoLimpeza(`✓ Apagado de ${unidadeInfo?.nome}. ${linhas}. Agora suba os arquivos novos.`);
+        carregar();
+      }
+    } catch (e) {
+      setResultadoLimpeza(`Erro: ${e instanceof Error ? e.message : 'erro'}`);
+    } finally {
+      setLimpando(false);
+    }
+  };
 
   const enviarArquivos = async () => {
     if (!unidadeId) return;
@@ -341,6 +375,25 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
               </button>
+
+              <details className="text-xs text-gray-500 mt-2">
+                <summary className="cursor-pointer hover:text-gray-400">⚠️ Limpar dados desta unidade</summary>
+                <div className="mt-2 p-3 bg-red-950/30 border border-red-900/40 rounded">
+                  <p className="text-gray-400 mb-2">
+                    Apaga TODOS os dados de {unidadeInfo?.nome} (leads, agendamentos, contratos, pagamentos, telemarketing). Use só pra refazer do zero. Pra remover apenas uma importação específica, use a tela <a href="/import" className="text-indigo-400 hover:underline">Relatórios</a>.
+                  </p>
+                  <button
+                    onClick={limparDadosUnidade}
+                    disabled={limpando}
+                    className="text-xs bg-red-900/50 hover:bg-red-900 text-red-200 px-3 py-1.5 rounded border border-red-800 disabled:opacity-50 transition"
+                  >
+                    {limpando ? 'Apagando...' : `Apagar tudo de ${unidadeInfo?.nome}`}
+                  </button>
+                  {resultadoLimpeza && (
+                    <div className="mt-2 text-[11px] text-gray-300">{resultadoLimpeza}</div>
+                  )}
+                </div>
+              </details>
 
               {(queue.pending.length > 0 || queue.uploading.length > 0 || queue.failed.length > 0) && (
                 <div className="bg-amber-950/40 border border-amber-700/60 text-amber-200 rounded-lg p-3 text-sm">
