@@ -85,11 +85,10 @@ export default function FunisIndividuaisPage() {
     carregar(unidadeId, intervalo.desde, intervalo.ate);
   }, [unidadeId, periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
 
-  // Mostra TODAS as campanhas individualmente — sem agrupar em "Outros".
-  // Inclui qualquer campanha que tem QUALQUER atividade no periodo
-  // (cadastros, agendados, compareceu, fechou ou pagou). Isso garante
-  // que campanhas como UPDONTIC apareçam mesmo sem cadastros novos
-  // mas com pacientes que fecharam/pagaram.
+  // Mostra TODAS as campanhas individualmente. As 5 Kommo aparecem sempre
+  // (mesmo zeradas). Sistema mostra qualquer com atividade. ORDEM unica:
+  // mais contratos PAGOS no topo. Tiebreaker: fecharam, depois receita,
+  // depois cadastrados. Campanhas zeradas vao pro final.
   const funisRecebidos = dados?.funis || [];
   const temAtividade = (f: FunilOrigem) =>
     f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0;
@@ -114,18 +113,16 @@ export default function FunisIndividuaisPage() {
       taxa_fechamento_para_pagamento: null,
     };
   });
-  // Sistema (nao-Kommo): mostra qualquer com atividade, ordenado por
-  // cadastrados desc, depois por (agendados+compareceram+fecharam+pagaram).
-  const sistemaFunis = funisRecebidos
-    .filter(f => f.fonte === 'sistema' && temAtividade(f))
-    .sort((a, b) => {
-      if (b.cadastrados !== a.cadastrados) return b.cadastrados - a.cadastrados;
-      const totA = a.agendados + a.compareceram + a.fecharam + a.pagaram;
-      const totB = b.agendados + b.compareceram + b.fecharam + b.pagaram;
-      return totB - totA;
-    });
+  const sistemaFunis = funisRecebidos.filter(
+    f => f.fonte === 'sistema' && temAtividade(f),
+  );
 
-  const todasCampanhas = [...kommoFunis, ...sistemaFunis];
+  const todasCampanhas = [...kommoFunis, ...sistemaFunis].sort((a, b) => {
+    if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
+    if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
+    if (b.receita !== a.receita) return b.receita - a.receita;
+    return b.cadastrados - a.cadastrados;
+  });
 
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-10">
