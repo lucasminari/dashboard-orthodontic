@@ -175,12 +175,20 @@ export default function ComparativoPage() {
               </div>
             </Section>
 
-            {/* Mesma campanha em diferentes unidades */}
+            {/* Mesma campanha em diferentes unidades (tabela) */}
             <Section
-              titulo="Comparativo por campanha"
-              descricao="Mesma campanha lado a lado entre unidades — vê onde cada origem rende mais."
+              titulo="Comparativo por campanha (resumo)"
+              descricao="Mesma campanha lado a lado entre unidades — número absoluto. Maior valor de cada linha em destaque."
             >
               <CampanhaPorUnidade unidades={unidades} />
+            </Section>
+
+            {/* Detalhamento por campanha — funis nas 3 unidades */}
+            <Section
+              titulo="Detalhamento por campanha"
+              descricao="Funil completo de cada campanha em cada unidade. Vê exatamente onde cada combinação ganha ou perde."
+            >
+              <DetalheCampanhaPorUnidade unidades={unidades} />
             </Section>
           </div>
         )}
@@ -426,6 +434,173 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+const KOMMO_FIXAS = ['Mídia Real', 'DBOUT', 'PitchYes', 'Sorriso Novo', 'Galú'];
+
+function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
+  const [aberto, setAberto] = useState<Set<string>>(new Set());
+
+  // Junta todas as origens com atividade em pelo menos uma unidade
+  const todasOrigens = new Set<string>();
+  unidades.forEach(u => u.funil.funis.forEach(f => {
+    if (f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0) {
+      todasOrigens.add(f.origem);
+    }
+  }));
+  // 5 Kommo aparecem sempre
+  KOMMO_FIXAS.forEach(k => todasOrigens.add(k));
+
+  // Ordena: Kommo primeiro na ordem fixa, resto por volume total desc
+  const lista = Array.from(todasOrigens).sort((a, b) => {
+    const ai = KOMMO_FIXAS.indexOf(a);
+    const bi = KOMMO_FIXAS.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    if (a === 'Sem origem') return 1;
+    if (b === 'Sem origem') return -1;
+    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.cadastrados || 0), 0);
+    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.cadastrados || 0), 0);
+    return totalB - totalA;
+  });
+
+  if (lista.length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-sm text-gray-500">
+        Nenhuma campanha no período.
+      </div>
+    );
+  }
+
+  function toggle(origem: string) {
+    setAberto(prev => {
+      const novo = new Set(prev);
+      if (novo.has(origem)) novo.delete(origem);
+      else novo.add(origem);
+      return novo;
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      {lista.map(origem => {
+        const expandido = aberto.has(origem);
+        // Pega o funil de cada unidade pra essa origem
+        const porUnidade = unidades.map(u => {
+          const f = u.funil.funis.find(x => x.origem === origem);
+          return {
+            unidade: u,
+            funil: f,
+            total: f ? f.cadastrados + f.agendados + f.compareceram + f.fecharam + f.pagaram : 0,
+          };
+        });
+        const totalGeral = porUnidade.reduce((s, x) => s + x.total, 0);
+
+        return (
+          <div key={origem} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <button
+              onClick={() => toggle(origem)}
+              className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-800/40 transition text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm">{expandido ? '▼' : '▶'}</span>
+                <span className="font-medium text-gray-100">{origem}</span>
+                {totalGeral === 0 && (
+                  <span className="text-[10px] text-gray-600 ml-2">(sem dados)</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                {porUnidade.map(({ unidade, funil }) => (
+                  <span key={unidade.unidade_id} style={{ color: unidade.cor }}>
+                    {unidade.nome.split(' ')[0]}: {funil?.cadastrados || 0}
+                  </span>
+                ))}
+              </div>
+            </button>
+            {expandido && (
+              <div className="border-t border-gray-800 p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {porUnidade.map(({ unidade, funil }) => (
+                  <MiniFunilUnidade
+                    key={unidade.unidade_id}
+                    unidade={unidade}
+                    funil={funil}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniFunilUnidade({
+  unidade,
+  funil,
+}: {
+  unidade: DadosUnidade;
+  funil: FunilOrigem | undefined;
+}) {
+  const f = funil || {
+    cadastrados: 0,
+    agendados: 0,
+    compareceram: 0,
+    fecharam: 0,
+    pagaram: 0,
+    receita: 0,
+    taxa_cadastro_para_agendamento: null,
+    taxa_agendamento_para_comparecimento: null,
+    taxa_comparecimento_para_fechamento: null,
+    taxa_fechamento_para_pagamento: null,
+  };
+  const etapas = [
+    { nome: 'Cadastr.', valor: f.cadastrados, taxa: null as number | null },
+    { nome: 'Agend.', valor: f.agendados, taxa: f.taxa_cadastro_para_agendamento },
+    { nome: 'Compar.', valor: f.compareceram, taxa: f.taxa_agendamento_para_comparecimento },
+    { nome: 'Fechou', valor: f.fecharam, taxa: f.taxa_comparecimento_para_fechamento },
+    { nome: 'Pagou', valor: f.pagaram, taxa: f.taxa_fechamento_para_pagamento },
+  ];
+  const max = Math.max(...etapas.map(e => e.valor), 1);
+
+  return (
+    <div className="bg-gray-950 rounded-lg p-3 border border-gray-800">
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="font-semibold text-sm" style={{ color: unidade.cor }}>
+          {unidade.nome}
+        </span>
+        {f.receita > 0 && (
+          <span className="text-[10px] text-emerald-400">R$ {fmtBR(f.receita)}</span>
+        )}
+      </div>
+      <div className="space-y-1">
+        {etapas.map(e => {
+          const pct = (e.valor / max) * 100;
+          return (
+            <div key={e.nome} className="flex items-center gap-2">
+              <div className="w-14 text-[10px] text-gray-400 shrink-0">{e.nome}</div>
+              <div className="flex-1 bg-gray-800 rounded h-4 relative overflow-hidden">
+                <div
+                  className="h-full rounded flex items-center pl-1.5"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: unidade.cor,
+                    minWidth: e.valor > 0 ? '20px' : '0',
+                  }}
+                >
+                  <span className="text-[10px] font-semibold text-white">{e.valor}</span>
+                </div>
+              </div>
+              <div className="w-9 text-right text-[10px] text-gray-500 shrink-0">
+                {e.taxa === null ? '—' : `${(e.taxa * 100).toFixed(0)}%`}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

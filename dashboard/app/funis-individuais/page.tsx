@@ -31,6 +31,11 @@ type RespostaFunil = {
   };
 };
 
+type RespostaTendencia = {
+  meses: string[];
+  origens: Record<string, { serie: number[]; variacao: number | null }>;
+};
+
 const UNIDADES = [
   { id: 1, nome: 'Centro' },
   { id: 2, nome: 'Várzea Paulista' },
@@ -77,6 +82,7 @@ export default function FunisIndividuaisPage() {
   const [unidadeId, setUnidadeId] = useState(1);
   const [periodoId, setPeriodoId] = useState('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
+  const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -89,11 +95,17 @@ export default function FunisIndividuaisPage() {
     if (intervalo.desde) params.set('data_inicio', intervalo.desde);
     if (intervalo.ate) params.set('data_fim', intervalo.ate);
 
+    const tParams = new URLSearchParams();
+    if (uId) tParams.set('unidade_id', String(uId));
+
     try {
-      const res = await fetch(`/api/funil-completo?${params.toString()}`);
-      const json = await res.json();
-      if (json.error) setErro(json.error);
-      else setDados(json);
+      const [funilRes, tendRes] = await Promise.all([
+        fetch(`/api/funil-completo?${params.toString()}`).then(r => r.json()),
+        fetch(`/api/tendencia-origens?${tParams.toString()}`).then(r => r.json()),
+      ]);
+      if (funilRes.error) setErro(funilRes.error);
+      else setDados(funilRes);
+      if (!tendRes.error) setTendencia(tendRes);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro');
     } finally {
@@ -106,10 +118,16 @@ export default function FunisIndividuaisPage() {
   }, [unidadeId, periodoId, carregar]);
 
   // Mostra TODAS as campanhas individualmente — sem agrupar em "Outros".
-  // As 5 origens Kommo aparecem sempre, mesmo zeradas, pra dar visibilidade
-  // a campanhas pagas que estao sem performance no periodo.
+  // Inclui qualquer campanha que tem QUALQUER atividade no periodo
+  // (cadastros, agendados, compareceu, fechou ou pagou). Isso garante
+  // que campanhas como UPDONTIC apareçam mesmo sem cadastros novos
+  // mas com pacientes que fecharam/pagaram.
   const funisRecebidos = dados?.funis || [];
+  const temAtividade = (f: FunilOrigem) =>
+    f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0;
   const mapPorOrigem = new Map(funisRecebidos.map(f => [f.origem, f]));
+
+  // 5 origens Kommo aparecem sempre, mesmo zeradas
   const kommoFunis: FunilOrigem[] = ORIGENS_KOMMO.map(nome => {
     const existente = mapPorOrigem.get(nome);
     if (existente) return existente;
@@ -128,10 +146,16 @@ export default function FunisIndividuaisPage() {
       taxa_fechamento_para_pagamento: null,
     };
   });
-  // Sistema (nao-Kommo): so mostra com cadastrados > 0, por volume
+  // Sistema (nao-Kommo): mostra qualquer com atividade, ordenado por
+  // cadastrados desc, depois por (agendados+compareceram+fecharam+pagaram).
   const sistemaFunis = funisRecebidos
-    .filter(f => f.fonte === 'sistema' && f.cadastrados > 0)
-    .sort((a, b) => b.cadastrados - a.cadastrados);
+    .filter(f => f.fonte === 'sistema' && temAtividade(f))
+    .sort((a, b) => {
+      if (b.cadastrados !== a.cadastrados) return b.cadastrados - a.cadastrados;
+      const totA = a.agendados + a.compareceram + a.fecharam + a.pagaram;
+      const totB = b.agendados + b.compareceram + b.fecharam + b.pagaram;
+      return totB - totA;
+    });
 
   const todasCampanhas = [...kommoFunis, ...sistemaFunis];
 
@@ -190,7 +214,13 @@ export default function FunisIndividuaisPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {todasCampanhas.map(f => <CampanhaCard key={f.origem} f={f} />)}
+                {todasCampanhas.map(f => (
+                  <CampanhaCard
+                    key={f.origem}
+                    f={f}
+                    tendenciaOrigem={tendencia?.origens[f.origem]}
+                  />
+                ))}
               </div>
             )}
           </>
@@ -200,21 +230,44 @@ export default function FunisIndividuaisPage() {
   );
 }
 
-function CampanhaCard({ f }: { f: FunilOrigem }) {
+function CampanhaCard({
+  f,
+  tendenciaOrigem,
+}: {
+  f: FunilOrigem;
+  tendenciaOrigem?: { serie: number[]; variacao: number | null };
+}) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-      <div className="flex items-baseline justify-between mb-4">
+      <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
         <Link
           href={`/origem/${encodeURIComponent(f.origem)}`}
           className="font-semibold text-base text-gray-100 hover:text-indigo-300 transition"
         >
           {f.origem} →
         </Link>
-        {f.receita > 0 && (
-          <span className="text-emerald-400 font-medium text-xs">
-            R$ {f.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {tendenciaOrigem && tendenciaOrigem.serie.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Sparkline serie={tendenciaOrigem.serie} />
+              {tendenciaOrigem.variacao !== null && (
+                <span
+                  className={`text-[10px] whitespace-nowrap ${
+                    tendenciaOrigem.variacao >= 0 ? 'text-emerald-400' : 'text-red-400'
+                  }`}
+                >
+                  {tendenciaOrigem.variacao >= 0 ? '↑' : '↓'} {(tendenciaOrigem.variacao * 100).toFixed(0)}%
+                </span>
+              )}
+              <span className="text-[9px] text-gray-600">vs mês ant.</span>
+            </div>
+          )}
+          {f.receita > 0 && (
+            <span className="text-emerald-400 font-medium text-xs">
+              R$ {f.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -363,5 +416,27 @@ function FunilPerda({ f }: { f: FunilOrigem }) {
         </span>
       </div>
     </div>
+  );
+}
+
+function Sparkline({ serie }: { serie: number[] }) {
+  if (serie.length === 0) return null;
+  const max = Math.max(...serie, 1);
+  const w = 70;
+  const h = 18;
+  const pontos = serie
+    .map((v, i) => {
+      const x = (i / Math.max(serie.length - 1, 1)) * w;
+      const y = h - (v / max) * (h - 2) - 1;
+      return `${x},${y}`;
+    })
+    .join(' ');
+  const ult = serie[serie.length - 1];
+  const pen = serie[serie.length - 2] || 0;
+  const cor = ult > pen ? '#10b981' : ult < pen ? '#ef4444' : '#6366f1';
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline fill="none" stroke={cor} strokeWidth="1.5" points={pontos} />
+    </svg>
   );
 }
