@@ -43,7 +43,7 @@ function buildParams(uId: number, desde?: string, ate?: string): string {
 }
 
 export default function Home() {
-  const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('30dias');
+  const { unidadeId, periodoId, intervalo, intervaloAnt, pronto } = useFiltros('mes');
   const [total, setTotal] = useState<TotalFunil | null>(null);
   const [totalAnt, setTotalAnt] = useState<TotalFunil | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);

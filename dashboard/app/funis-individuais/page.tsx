@@ -45,7 +45,7 @@ function fmtPct(v: number | null): string {
 }
 
 export default function FunisIndividuaisPage() {
-  const { unidadeId, periodoId, intervalo, pronto } = useFiltros('30dias');
+  const { unidadeId, periodoId, intervalo, pronto } = useFiltros('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);
   const [carregando, setCarregando] = useState(true);

@@ -34,7 +34,7 @@ export const PERIODOS: { id: PeriodoId; nome: string }[] = [
 
 // Versao do schema do filtro persistido. Bumpar quando mudar o default
 // pra invalidar localStorage de usuarios antigos.
-const VERSAO_FILTRO = 2;
+const VERSAO_FILTRO = 3;
 const KEY_UNIDADE = `filtro-unidade-id-v${VERSAO_FILTRO}`;
 const KEY_PERIODO = `filtro-periodo-id-v${VERSAO_FILTRO}`;
 
