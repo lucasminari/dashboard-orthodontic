@@ -3,7 +3,10 @@ import { processarArquivos } from '@/lib/parsers';
 
 export const dynamic = 'force-dynamic';
 
-const TIPOS_ESPERADOS = ['leads', 'sistema', 'performance', 'campanhas'];
+// 'leads' é opcional desde a remoção da etapa "Cadastrados" — só usado
+// historicamente. Os 3 tipos abaixo sao obrigatorios.
+const TIPOS_OBRIGATORIOS = ['sistema', 'performance', 'campanhas'];
+const TIPOS_ACEITOS = ['leads', 'sistema', 'performance', 'campanhas'];
 const EXTENSOES_VALIDAS: Record<string, string[]> = {
   leads: ['xlsx'],
   sistema: ['xlsx'],
@@ -54,14 +57,14 @@ export async function POST(request: NextRequest) {
 
         if (!tipo) {
           return NextResponse.json(
-            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'leads', 'sistema', 'performance' ou 'campanhas' no nome.` },
+            { error: `Não consegui identificar o tipo do arquivo: ${filename}. Certifique-se que o arquivo contém 'sistema', 'performance' ou 'campanhas' no nome.` },
             { status: 400 },
           );
         }
 
-        if (!TIPOS_ESPERADOS.includes(tipo)) {
+        if (!TIPOS_ACEITOS.includes(tipo)) {
           return NextResponse.json(
-            { error: `Tipo inválido: ${tipo}. Esperado: leads, sistema, performance ou campanhas` },
+            { error: `Tipo inválido: ${tipo}. Esperado: sistema, performance ou campanhas` },
             { status: 400 },
           );
         }
@@ -78,8 +81,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validar que tem todos 4 tipos
-    const tiposFaltando = TIPOS_ESPERADOS.filter((t) => !tipos.has(t));
+    // Valida que tem todos os tipos obrigatorios (leads eh opcional)
+    const tiposFaltando = TIPOS_OBRIGATORIOS.filter((t) => !tipos.has(t));
     if (tiposFaltando.length > 0) {
       return NextResponse.json(
         { error: `Faltam arquivos: ${tiposFaltando.join(', ')}` },

@@ -10,13 +10,11 @@ import { MatrizConversoes } from '../components/MatrizConversoes';
 type FunilOrigem = {
   origem: string;
   fonte: 'kommo' | 'sistema';
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
   pagaram: number;
   receita: number;
-  taxa_cadastro_para_agendamento: number | null;
   taxa_agendamento_para_comparecimento: number | null;
   taxa_comparecimento_para_fechamento: number | null;
   taxa_fechamento_para_pagamento: number | null;
@@ -25,7 +23,6 @@ type FunilOrigem = {
 type RespostaFunil = {
   funis: FunilOrigem[];
   total: {
-    cadastrados: number;
     agendados: number;
     compareceram: number;
     fecharam: number;
@@ -93,7 +90,7 @@ export default function FunisIndividuaisPage() {
   // depois cadastrados. Campanhas zeradas vao pro final.
   const funisRecebidos = dados?.funis || [];
   const temAtividade = (f: FunilOrigem) =>
-    f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0;
+    f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0;
   const mapPorOrigem = new Map(funisRecebidos.map(f => [f.origem, f]));
 
   // 5 origens Kommo aparecem sempre, mesmo zeradas
@@ -103,13 +100,11 @@ export default function FunisIndividuaisPage() {
     return {
       origem: nome,
       fonte: 'kommo' as const,
-      cadastrados: 0,
       agendados: 0,
       compareceram: 0,
       fecharam: 0,
       pagaram: 0,
       receita: 0,
-      taxa_cadastro_para_agendamento: null,
       taxa_agendamento_para_comparecimento: null,
       taxa_comparecimento_para_fechamento: null,
       taxa_fechamento_para_pagamento: null,
@@ -123,7 +118,7 @@ export default function FunisIndividuaisPage() {
     if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
     if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
     if (b.receita !== a.receita) return b.receita - a.receita;
-    return b.cadastrados - a.cadastrados;
+    return b.agendados - a.agendados;
   });
 
   // TOP 5 com mais contratos pagos vai destacado.
@@ -275,7 +270,6 @@ function CampanhaCard({
         </div>
       </div>
       <MatrizConversoes
-        cadastrados={f.cadastrados}
         agendados={f.agendados}
         compareceram={f.compareceram}
         fecharam={f.fecharam}
@@ -288,8 +282,7 @@ function CampanhaCard({
 
 function FunilConversao({ f }: { f: FunilOrigem }) {
   const etapas = [
-    { nome: 'Cadastrados', valor: f.cadastrados, cor: '#6366f1', taxa: null as number | null },
-    { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: f.taxa_cadastro_para_agendamento },
+    { nome: 'Agendados', valor: f.agendados, cor: '#06b6d4', taxa: null as number | null },
     { nome: 'Compareceram', valor: f.compareceram, cor: '#a855f7', taxa: f.taxa_agendamento_para_comparecimento },
     { nome: 'Fecharam', valor: f.fecharam, cor: '#eab308', taxa: f.taxa_comparecimento_para_fechamento },
     { nome: 'Pagaram', valor: f.pagaram, cor: '#10b981', taxa: f.taxa_fechamento_para_pagamento },
@@ -334,14 +327,7 @@ function FunilConversao({ f }: { f: FunilOrigem }) {
 }
 
 function FunilPerda({ f }: { f: FunilOrigem }) {
-  // Cada "degrau" mostra quantos lead perderam entre etapa N e N+1
   const transicoes = [
-    {
-      de: 'Cadastrados',
-      para: 'Agendados',
-      perdidos: f.cadastrados - f.agendados,
-      base: f.cadastrados,
-    },
     {
       de: 'Agendados',
       para: 'Compareceram',
@@ -406,10 +392,10 @@ function FunilPerda({ f }: { f: FunilOrigem }) {
       <div className="pt-2 mt-2 border-t border-gray-800 flex items-baseline justify-between text-[11px]">
         <span className="text-gray-400">Total perdido no funil</span>
         <span className="text-red-300 font-semibold tabular-nums">
-          −{totalPerdido} de {f.cadastrados}
-          {f.cadastrados > 0 && (
+          −{totalPerdido} de {f.agendados}
+          {f.agendados > 0 && (
             <span className="text-gray-500 font-normal ml-1">
-              ({((totalPerdido / f.cadastrados) * 100).toFixed(0)}%)
+              ({((totalPerdido / f.agendados) * 100).toFixed(0)}%)
             </span>
           )}
         </span>

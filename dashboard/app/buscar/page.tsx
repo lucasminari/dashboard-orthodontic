@@ -148,9 +148,7 @@ function CardPaciente({ p }: { p: PacienteResultado }) {
         ? { rotulo: 'Avaliou', cor: 'text-purple-300', data: p.data_avaliacao }
         : p.ultimo_atendimento
           ? { rotulo: 'Em atendimento', cor: 'text-cyan-300', data: p.ultimo_atendimento }
-          : p.data_cadastro_kommo
-            ? { rotulo: 'Cadastrado (Kommo)', cor: 'text-indigo-300', data: p.data_cadastro_kommo }
-            : { rotulo: 'Sem status', cor: 'text-gray-500', data: null };
+          : { rotulo: 'Sem status', cor: 'text-gray-500', data: null };
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -191,8 +189,7 @@ function CardPaciente({ p }: { p: PacienteResultado }) {
       </div>
 
       {/* Mini-funil em badges */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-        <Etapa rotulo="Cadastro Kommo" data={p.data_cadastro_kommo} cor="indigo" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <Etapa rotulo="Avaliou" data={p.data_avaliacao} cor="purple" />
         <Etapa rotulo="Contrato" data={p.data_contrato} cor="amber" valor={p.vlr_contrato} />
         <Etapa rotulo="Pagamento" data={p.data_pgto} cor="emerald" />

@@ -12,7 +12,6 @@ import { BarraMeta } from './components/BarraMeta';
 import { MatrizConversoes } from './components/MatrizConversoes';
 
 type TotalFunil = {
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
@@ -22,7 +21,6 @@ type TotalFunil = {
 type FunilOrigem = {
   origem: string;
   fonte: 'kommo' | 'sistema';
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
@@ -117,7 +115,7 @@ export default function Home() {
           <p className="text-gray-400">OrthoDontic — {unidadeAtual} · {periodoAtual}</p>
           <div className="mt-2">
             <AtualizadoEm
-              tipos={['leads', 'sistema', 'performance', 'campanhas']}
+              tipos={['sistema', 'performance', 'campanhas']}
               unidadeId={unidadeId || undefined}
             />
           </div>
@@ -134,14 +132,6 @@ export default function Home() {
           <Alertas unidadeId={unidadeId || undefined} />
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <Card
-              label="Cadastrados"
-              valor={total.cadastrados}
-              valorAnterior={totalAnt?.cadastrados}
-              tooltip="Pacientes únicos cadastrados no período (Kommo + sistema Orthodontic, sem duplicar)."
-              unidadeId={unidadeId}
-              tipos={['leads', 'sistema']}
-            />
             <Card
               label="Agendados"
               valor={total.agendados}
@@ -166,6 +156,15 @@ export default function Home() {
               valorAnterior={totalAnt?.fecharam}
               meta={metas.fecharam}
               tooltip="Pacientes que assinaram contrato no período (data de contrato preenchida)."
+              unidadeId={unidadeId}
+              tipos={['sistema']}
+            />
+            <Card
+              label="Pagaram"
+              valor={total.pagaram}
+              valorAnterior={totalAnt?.pagaram}
+              meta={metas.pagaram}
+              tooltip="Pacientes com pagamento confirmado (data_pgto preenchida) no período."
               unidadeId={unidadeId}
               tipos={['sistema']}
             />
@@ -279,7 +278,6 @@ function Card({
 
 function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: number }) {
   const etapas = [
-    { nome: 'Cadastrados',  valor: total.cadastrados,  cor: '#6366f1' },
     { nome: 'Agendados',    valor: total.agendados,    cor: '#06b6d4' },
     { nome: 'Compareceram', valor: total.compareceram, cor: '#a855f7' },
     { nome: 'Fecharam',     valor: total.fecharam,     cor: '#eab308' },
@@ -293,7 +291,7 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
           Funil de conversão
           <Tooltip texto="Cada etapa conta pacientes únicos. Taxa = % que avançou da etapa anterior. Cadastrados pode incluir leads que ainda estão em etapas iniciais." />
         </h2>
-        <AtualizadoEm tipos={['leads', 'sistema', 'performance']} unidadeId={unidadeId || undefined} />
+        <AtualizadoEm tipos={['sistema', 'performance']} unidadeId={unidadeId || undefined} />
       </div>
       <div className="space-y-3">
         {etapas.map((e, i) => {
@@ -317,7 +315,6 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
         })}
       </div>
       <MatrizConversoes
-        cadastrados={total.cadastrados}
         agendados={total.agendados}
         compareceram={total.compareceram}
         fecharam={total.fecharam}
@@ -331,15 +328,14 @@ function FunilGrafico({ total, unidadeId }: { total: TotalFunil; unidadeId?: num
 const TOP_CAMPANHAS = 5;
 
 function classificarOrigens(origens: FunilOrigem[]) {
-  // Considera origem com qualquer atividade no funil
   const ativas = origens.filter(
-    o => o.cadastrados > 0 || o.agendados > 0 || o.compareceram > 0 || o.fecharam > 0 || o.pagaram > 0,
+    o => o.agendados > 0 || o.compareceram > 0 || o.fecharam > 0 || o.pagaram > 0,
   );
   const ordenadas = [...ativas].sort((a, b) => {
     if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
     if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
     if (b.receita !== a.receita) return b.receita - a.receita;
-    return b.cadastrados - a.cadastrados;
+    return b.agendados - a.agendados;
   });
   const principais = ordenadas.slice(0, TOP_CAMPANHAS);
   const outros = ordenadas.slice(TOP_CAMPANHAS);
@@ -352,7 +348,6 @@ function agregarOutros(outros: FunilOrigem[]): FunilOrigem | null {
     (acc, o) => ({
       origem: 'Outros',
       fonte: 'sistema',
-      cadastrados: acc.cadastrados + o.cadastrados,
       agendados: acc.agendados + o.agendados,
       compareceram: acc.compareceram + o.compareceram,
       fecharam: acc.fecharam + o.fecharam,
@@ -362,7 +357,6 @@ function agregarOutros(outros: FunilOrigem[]): FunilOrigem | null {
     {
       origem: 'Outros',
       fonte: 'sistema' as const,
-      cadastrados: 0,
       agendados: 0,
       compareceram: 0,
       fecharam: 0,
@@ -388,7 +382,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex items-start justify-between mb-1">
         <h2 className="text-lg font-semibold">Top 5 campanhas (por contratos pagos)</h2>
-        <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
+        <AtualizadoEm tipos={['sistema']} unidadeId={unidadeId || undefined} />
       </div>
       <p className="text-xs text-gray-500 mb-6">Clique numa campanha para abrir o detalhamento.</p>
       {linhas.length === 0 ? (
@@ -398,7 +392,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
           {linhas.map(o => {
             const isOutros = o.origem === 'Outros';
             const pct = (o.pagaram / max) * 100;
-            const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
+            const taxa = o.agendados > 0 ? (o.fecharam / o.agendados) * 100 : 0;
 
             const conteudo = (
               <>
@@ -421,7 +415,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                       {o.pagaram.toLocaleString('pt-BR')} pagos
                     </span>
                     <span className="text-gray-600 mx-1">·</span>
-                    {o.cadastrados.toLocaleString('pt-BR')} leads
+                    {o.agendados.toLocaleString('pt-BR')} agend
                     {taxa > 0 && (
                       <span className="ml-1 text-gray-500">({taxa.toFixed(0)}%)</span>
                     )}
@@ -455,7 +449,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                       .slice()
                       .sort((a, b) => b.pagaram - a.pagaram || b.fecharam - a.fecharam)
                       .map(sub => {
-                      const subTaxa = sub.cadastrados > 0 ? (sub.fecharam / sub.cadastrados) * 100 : 0;
+                      const subTaxa = sub.agendados > 0 ? (sub.fecharam / sub.agendados) * 100 : 0;
                       return (
                         <Link
                           key={sub.origem}
@@ -469,7 +463,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                           <span className="text-gray-500">
                             <span className="text-emerald-500">{sub.pagaram} pagos</span>
                             <span className="text-gray-700 mx-1">·</span>
-                            {sub.cadastrados} leads
+                            {sub.agendados} agend
                             {subTaxa > 0 && (
                               <span className="ml-1 text-gray-600">({subTaxa.toFixed(0)}%)</span>
                             )}

@@ -1,23 +1,21 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { mapearOrigem, isOrigemKommo } from '@/lib/origem-mapeamento';
+import { mapearOrigem } from '@/lib/origem-mapeamento';
 
 export const dynamic = 'force-dynamic';
 
-// Retorna, para cada origem, a serie de cadastrados nos ultimos 6 meses
+// Retorna, para cada origem, a serie de AGENDAMENTOS nos ultimos 6 meses
 // e a variacao % do mes atual em relacao ao mes anterior.
 //
-// Ex: { "Mídia Real": { serie: [12, 18, 15, 22, 19, 28], variacao: 0.47 } }
-//
-// Para origens Kommo: cadastrados vem de raw_leads.data_cadastro.
-// Para origens do sistema: cadastrados vem de raw_sistema.data_avaliacao.
+// Antes usavamos cadastros (raw_leads), mas o foco do dashboard agora eh
+// do agendamento em diante. Tendencia = quantos agendamentos novos por mes
+// pra cada origem.
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const unidadeIdParam = searchParams.get('unidade_id');
     const unidadeId = unidadeIdParam ? parseInt(unidadeIdParam, 10) : null;
 
-    // Calcula janela de 6 meses
     const hoje = new Date();
     const meses: string[] = [];
     for (let i = 5; i >= 0; i--) {
@@ -25,14 +23,6 @@ export async function GET(request: NextRequest) {
       meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
     const dataMin = `${meses[0]}-01`;
-
-    let qLeads = supabase
-      .from('raw_leads')
-      .select('origem, data_cadastro, telefone_norm, nome, unidade_id')
-      .gte('data_cadastro', dataMin);
-    if (unidadeId) qLeads = qLeads.eq('unidade_id', unidadeId);
-    const { data: leadsRows, error: errLeads } = await qLeads;
-    if (errLeads) throw new Error(`raw_leads: ${errLeads.message}`);
 
     let qSis = supabase
       .from('raw_sistema')
@@ -52,18 +42,8 @@ export async function GET(request: NextRequest) {
       mp.get(mes)!.add(chave);
     }
 
-    for (const r of leadsRows || []) {
-      const origem = mapearOrigem(r.origem);
-      if (!isOrigemKommo(origem)) continue; // Kommo: cadastros desta fonte
-      const mes = (r.data_cadastro || '').slice(0, 7);
-      const chave = r.telefone_norm
-        ? `tel:${r.telefone_norm}`
-        : `lead:${(r.nome || '').toLowerCase()}::${r.data_cadastro}`;
-      add(origem, mes, chave);
-    }
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
-      if (isOrigemKommo(origem)) continue; // sistema: so origens nao-Kommo
       const mes = (r.data_avaliacao || '').slice(0, 7);
       const chave = r.paciente_id_externo
         ? `id:${r.paciente_id_externo}`
@@ -89,7 +69,7 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Erro' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

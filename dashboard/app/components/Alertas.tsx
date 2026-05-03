@@ -40,7 +40,7 @@ export function Alertas({ unidadeId }: Props) {
                 tipo: 'sucesso',
                 origem,
                 pct: info.variacao,
-                detalhe: `${pen} → ${ult} cadastros`,
+                detalhe: `${pen} → ${ult} agendados`,
                 link: `/origem/${encodeURIComponent(origem)}`,
               });
             }
@@ -50,7 +50,7 @@ export function Alertas({ unidadeId }: Props) {
                 tipo: 'critico',
                 origem,
                 pct: info.variacao,
-                detalhe: `${pen} → ${ult} cadastros`,
+                detalhe: `${pen} → ${ult} agendados`,
                 link: `/origem/${encodeURIComponent(origem)}`,
               });
             }
@@ -61,7 +61,7 @@ export function Alertas({ unidadeId }: Props) {
               tipo: 'atencao',
               origem,
               pct: -1,
-              detalhe: `${pen} → 0 cadastros — verificar campanha`,
+              detalhe: `${pen} → 0 agendados — verificar campanha`,
               link: `/origem/${encodeURIComponent(origem)}`,
             });
           }

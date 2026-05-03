@@ -10,7 +10,6 @@ import {
 export const dynamic = 'force-dynamic';
 
 interface EtapasFunil {
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
@@ -21,30 +20,25 @@ interface EtapasFunil {
 interface FunilOrigem extends EtapasFunil {
   origem: string;
   fonte: 'kommo' | 'sistema';
+  // Mantemos 'cadastrados' por compatibilidade da resposta, sempre = agendados
+  // (pra clientes legados nao quebrarem). Pode ser removido depois.
+  cadastrados: number;
   taxa_cadastro_para_agendamento: number | null;
   taxa_agendamento_para_comparecimento: number | null;
   taxa_comparecimento_para_fechamento: number | null;
   taxa_fechamento_para_pagamento: number | null;
 }
 
-function ratio(num: number, den: number): number | null {
-  if (!den) return null;
-  return num / den;
-}
-
-// Acumulador interno: Sets de chaves de paciente unico para cada etapa.
 interface AcumuladorOrigem {
-  cadastrados: Set<string>;
   agendados: Set<string>;
   compareceram: Set<string>;
   fecharam: Set<string>;
   pagaram: Set<string>;
-  receita: number; // soma vlr_contrato dos contratos pagos
+  receita: number;
 }
 
 function novoAcumulador(): AcumuladorOrigem {
   return {
-    cadastrados: new Set(),
     agendados: new Set(),
     compareceram: new Set(),
     fecharam: new Set(),
@@ -54,7 +48,6 @@ function novoAcumulador(): AcumuladorOrigem {
 }
 
 function chavePacienteSistema(r: any): string {
-  // Prefere id_externo (mais confiavel), fallback para telefone normalizado.
   return r.paciente_id_externo
     ? `id:${r.paciente_id_externo}`
     : r.telefone_norm
@@ -62,16 +55,15 @@ function chavePacienteSistema(r: any): string {
       : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
 }
 
-function chavePacienteKommo(r: any): string {
-  return r.telefone_norm
-    ? `tel:${r.telefone_norm}`
-    : `lead:${(r.nome || '').toLowerCase().trim()}::${r.data_cadastro || ''}`;
-}
-
 function chavePacientePerf(r: any): string {
   return r.telefone_norm
     ? `tel:${r.telefone_norm}`
     : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
+}
+
+function ratio(num: number, den: number): number | null {
+  if (!den) return null;
+  return num / den;
 }
 
 export async function GET(request: NextRequest) {
@@ -82,20 +74,7 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
-    // ── 1. raw_leads (Kommo) ───────────────────────────────────────────────
-    let qLeads = supabase
-      .from('raw_leads')
-      .select('origem, data_cadastro, telefone_norm, nome, unidade_id');
-    if (unidadeId) qLeads = qLeads.eq('unidade_id', unidadeId);
-    if (dataInicio) qLeads = qLeads.gte('data_cadastro', dataInicio);
-    if (dataFim) qLeads = qLeads.lte('data_cadastro', dataFim);
-    const { data: leadsRows, error: errLeads } = await qLeads;
-    if (errLeads) throw new Error(`raw_leads: ${errLeads.message}`);
-
-    // ── 2. raw_sistema (Orthodontic) ───────────────────────────────────────
-    // NAO filtramos por data_avaliacao na query: cada etapa usa sua propria
-    // data (avaliacao, contrato ou pgto). O filtro de periodo eh aplicado
-    // por etapa abaixo, no acumulador.
+    // ── raw_sistema (Orthodontic) ─────────────────────────────────────────
     let qSis = supabase
       .from('raw_sistema')
       .select(
@@ -105,7 +84,7 @@ export async function GET(request: NextRequest) {
     const { data: sistemaRows, error: errSis } = await qSis;
     if (errSis) throw new Error(`raw_sistema: ${errSis.message}`);
 
-    // Helpers de filtro de periodo (datas em YYYY-MM-DD)
+    // Helpers de filtro de periodo
     const noPeriodo = (data: string | null | undefined): boolean => {
       if (!data) return false;
       const d = data.slice(0, 10);
@@ -115,7 +94,7 @@ export async function GET(request: NextRequest) {
     };
     const semFiltro = !dataInicio && !dataFim;
 
-    // ── 3. raw_performance (Telemarketing) ─────────────────────────────────
+    // ── raw_performance (Telemarketing) ───────────────────────────────────
     let qPerf = supabase
       .from('raw_performance')
       .select(
@@ -127,7 +106,7 @@ export async function GET(request: NextRequest) {
     const { data: perfRows, error: errPerf } = await qPerf;
     if (errPerf) throw new Error(`raw_performance: ${errPerf.message}`);
 
-    // ── 4. Acumular por origem normalizada (Sets para deduplicar) ──────────
+    // ── Acumulador por origem normalizada ─────────────────────────────────
     const acc: Map<string, AcumuladorOrigem> = new Map();
     function get(origem: string): AcumuladorOrigem {
       if (!acc.has(origem)) acc.set(origem, novoAcumulador());
@@ -136,30 +115,7 @@ export async function GET(request: NextRequest) {
     // Garante visibilidade das 5 origens Kommo mesmo sem dados
     for (const c of ORIGENS_KOMMO_CANONICAS) get(c);
 
-    // ── 5. Cadastrados ────────────────────────────────────────────────────
-    // Para origens Kommo: 1 cadastrado por linha de raw_leads (deduplicado
-    // por telefone para nao contar lead duplicado).
-    for (const r of leadsRows || []) {
-      const origem = mapearOrigem(r.origem);
-      get(origem).cadastrados.add(chavePacienteKommo(r));
-    }
-
-    // Para origens Sistema (nao-Kommo): 1 cadastrado por paciente unico no
-    // raw_sistema (porque o lead nasce direto la). Como nao temos data de
-    // cadastro confiavel no sistema, usamos data_avaliacao como proxy. Sem
-    // filtro de periodo, conta todos os pacientes.
-    for (const r of sistemaRows || []) {
-      const origem = mapearOrigem(r.origem);
-      if (isOrigemKommo(origem)) continue;
-      if (!semFiltro && !noPeriodo(r.data_avaliacao)) continue;
-      get(origem).cadastrados.add(chavePacienteSistema(r));
-    }
-
-    // ── 6. Agendados / Fecharam / Pagaram (raw_sistema + raw_performance) ──
-    // Agendados eh UNIAO de:
-    //  - pacientes em raw_sistema com data_avaliacao no periodo
-    //  - pacientes em raw_performance com data no periodo (todos do perf
-    //    foram agendados em algum momento — esta na base de telemarketing)
+    // ── Agendados / Fecharam / Pagaram (raw_sistema, filtro por etapa) ────
     for (const r of sistemaRows || []) {
       const origem = mapearOrigem(r.origem);
       const a = get(origem);
@@ -172,34 +128,32 @@ export async function GET(request: NextRequest) {
       }
       if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
         if (!a.pagaram.has(k)) {
-          // soma receita apenas na primeira vez que paciente eh contado
           a.receita += Number(r.vlr_contrato) || 0;
         }
         a.pagaram.add(k);
       }
     }
+
+    // Pacientes do raw_performance tambem entram em agendados (foram
+    // atendidos pelo telemarketing → agendaram em algum momento)
     for (const r of perfRows || []) {
       const origem = mapearOrigem(r.origem);
       const a = get(origem);
       const k = chavePacientePerf(r);
-      // raw_performance: cada linha eh um atendimento. Se tem registro,
-      // foi agendado.
       if (semFiltro || noPeriodo(r.data)) {
         a.agendados.add(k);
       }
     }
 
-    // ── 7. Compareceram ───────────────────────────────────────────────────
-    // Pacientes unicos com compareceu=true no raw_performance (no periodo).
+    // ── Compareceram (raw_performance, com fallback no raw_sistema) ───────
     for (const r of perfRows || []) {
       if (!r.compareceu) continue;
       if (!semFiltro && !noPeriodo(r.data)) continue;
       const origem = mapearOrigem(r.origem);
       get(origem).compareceram.add(chavePacientePerf(r));
     }
-
-    // Fallback: se origem tem agendados mas zero compareceram, infere a
-    // partir do raw_sistema (paciente avaliado e nao faltou).
+    // Fallback: se origem tem agendados mas zero compareceram, infere do
+    // raw_sistema (paciente avaliado e nao faltou).
     for (const [origem, a] of acc.entries()) {
       if (a.compareceram.size > 0 || a.agendados.size === 0) continue;
       for (const r of sistemaRows || []) {
@@ -213,10 +167,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 8. Monta lista final ──────────────────────────────────────────────
+    // ── Monta lista final ─────────────────────────────────────────────────
     const funis: FunilOrigem[] = [];
     for (const [origem, a] of acc.entries()) {
-      const cadastrados = a.cadastrados.size;
       const agendados = a.agendados.size;
       const compareceram = a.compareceram.size;
       const fecharam = a.fecharam.size;
@@ -224,13 +177,13 @@ export async function GET(request: NextRequest) {
       funis.push({
         origem,
         fonte: isOrigemKommo(origem) ? 'kommo' : 'sistema',
-        cadastrados,
+        cadastrados: agendados, // legado: igual a agendados
         agendados,
         compareceram,
         fecharam,
         pagaram,
         receita: a.receita,
-        taxa_cadastro_para_agendamento: ratio(agendados, cadastrados),
+        taxa_cadastro_para_agendamento: null, // legado, nao usado mais
         taxa_agendamento_para_comparecimento: ratio(compareceram, agendados),
         taxa_comparecimento_para_fechamento: ratio(fecharam, compareceram),
         taxa_fechamento_para_pagamento: ratio(pagaram, fecharam),
@@ -246,27 +199,26 @@ export async function GET(request: NextRequest) {
       }
       if (a.origem === ROTULO_SEM_ORIGEM) return 1;
       if (b.origem === ROTULO_SEM_ORIGEM) return -1;
-      return b.cadastrados - a.cadastrados;
+      return b.agendados - a.agendados;
     });
 
-    const total: EtapasFunil = funis.reduce(
+    const totalEt: EtapasFunil = funis.reduce(
       (acc, f) => ({
-        cadastrados: acc.cadastrados + f.cadastrados,
         agendados: acc.agendados + f.agendados,
         compareceram: acc.compareceram + f.compareceram,
         fecharam: acc.fecharam + f.fecharam,
         pagaram: acc.pagaram + f.pagaram,
         receita: acc.receita + f.receita,
       }),
-      { cadastrados: 0, agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
+      { agendados: 0, compareceram: 0, fecharam: 0, pagaram: 0, receita: 0 },
     );
+    const total = { ...totalEt, cadastrados: totalEt.agendados }; // legado
 
     return NextResponse.json({
       filtro: { unidade_id: unidadeId, data_inicio: dataInicio, data_fim: dataFim },
       funis,
       total,
       contagem: {
-        leads: leadsRows?.length || 0,
         sistema: sistemaRows?.length || 0,
         performance: perfRows?.length || 0,
       },

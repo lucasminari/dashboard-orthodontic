@@ -7,7 +7,6 @@ interface Etapa {
 }
 
 interface Props {
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
@@ -30,7 +29,6 @@ function corPorTaxa(taxa: number): string {
  * Ajuda a ler o funil de forma completa, nao so entre etapas adjacentes.
  */
 export function MatrizConversoes({
-  cadastrados,
   agendados,
   compareceram,
   fecharam,
@@ -38,7 +36,6 @@ export function MatrizConversoes({
   compacto = false,
 }: Props) {
   const etapas: Etapa[] = [
-    { label: 'Cadastrados', curto: 'Cadastr.', valor: cadastrados },
     { label: 'Agendados', curto: 'Agend.', valor: agendados },
     { label: 'Compareceram', curto: 'Compar.', valor: compareceram },
     { label: 'Fecharam', curto: 'Fech.', valor: fecharam },

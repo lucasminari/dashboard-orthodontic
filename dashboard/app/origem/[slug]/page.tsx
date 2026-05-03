@@ -10,7 +10,6 @@ type ItemRanking = { nome: string; total: number; receita?: number };
 type MesEvolucao = {
   mes: string;
   rotulo: string;
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
@@ -22,7 +21,6 @@ type RespostaDetalhe = {
   origem: string;
   filtro: { unidade_id: number | null; data_inicio: string | null; data_fim: string | null };
   kpis: {
-    cadastrados: number;
     agendados: number;
     compareceram: number;
     fecharam: number;
@@ -31,14 +29,12 @@ type RespostaDetalhe = {
     ticket_medio: number;
   };
   taxas: {
-    cad_agend: number | null;
     agend_comp: number | null;
     comp_fech: number | null;
     fech_pag: number | null;
   };
   media_geral: {
     ticket_medio: number;
-    cad_agend: number | null;
     agend_comp: number | null;
     comp_fech: number | null;
     fech_pag: number | null;
@@ -186,8 +182,7 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
         {!carregando && !erro && dados && (
           <div className="space-y-6">
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              <KpiCard titulo="Cadastrados" valor={dados.kpis.cadastrados} cor="#6366f1" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <KpiCard titulo="Agendados" valor={dados.kpis.agendados} cor="#06b6d4" />
               <KpiCard titulo="Compareceram" valor={dados.kpis.compareceram} cor="#a855f7" />
               <KpiCard titulo="Fecharam" valor={dados.kpis.fecharam} cor="#eab308" />
@@ -218,7 +213,6 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
 
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <MatrizConversoes
-                cadastrados={dados.kpis.cadastrados}
                 agendados={dados.kpis.agendados}
                 compareceram={dados.kpis.compareceram}
                 fecharam={dados.kpis.fecharam}
@@ -282,8 +276,7 @@ function FunilInvertido({
   mediaGeral: RespostaDetalhe['media_geral'];
 }) {
   const etapas = [
-    { nome: 'Cadastrados', valor: kpis.cadastrados, cor: '#6366f1', taxa: null as number | null, taxaMedia: null as number | null, anterior: null as number | null },
-    { nome: 'Agendados', valor: kpis.agendados, cor: '#06b6d4', taxa: taxas.cad_agend, taxaMedia: mediaGeral.cad_agend, anterior: kpis.cadastrados },
+    { nome: 'Agendados', valor: kpis.agendados, cor: '#06b6d4', taxa: null as number | null, taxaMedia: null as number | null, anterior: null as number | null },
     { nome: 'Compareceram', valor: kpis.compareceram, cor: '#a855f7', taxa: taxas.agend_comp, taxaMedia: mediaGeral.agend_comp, anterior: kpis.agendados },
     { nome: 'Fecharam', valor: kpis.fecharam, cor: '#eab308', taxa: taxas.comp_fech, taxaMedia: mediaGeral.comp_fech, anterior: kpis.compareceram },
     { nome: 'Pagaram', valor: kpis.pagaram, cor: '#10b981', taxa: taxas.fech_pag, taxaMedia: mediaGeral.fech_pag, anterior: kpis.fecharam },
@@ -348,7 +341,7 @@ function FunilInvertido({
 
 function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
   const max = Math.max(
-    ...evolucao.flatMap(m => [m.cadastrados, m.agendados, m.fecharam, m.pagaram]),
+    ...evolucao.flatMap(m => [m.agendados, m.compareceram, m.fecharam, m.pagaram]),
     1
   );
   const w = 60;
@@ -356,9 +349,7 @@ function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
   const total = evolucao.length;
   const stepX = (w * total) / total;
 
-  // Coordenadas das linhas
   const linhas: { nome: string; cor: string; valores: number[] }[] = [
-    { nome: 'Cadastr.', cor: '#6366f1', valores: evolucao.map(e => e.cadastrados) },
     { nome: 'Agend.', cor: '#06b6d4', valores: evolucao.map(e => e.agendados) },
     { nome: 'Compar.', cor: '#a855f7', valores: evolucao.map(e => e.compareceram) },
     { nome: 'Fech.', cor: '#eab308', valores: evolucao.map(e => e.fecharam) },
@@ -369,16 +360,15 @@ function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
     return valores
       .map((v, i) => {
         const x = (i / Math.max(valores.length - 1, 1)) * 100;
-        const y = 100 - (v / max) * 90 - 5; // 5% margin top/bottom
+        const y = 100 - (v / max) * 90 - 5;
         return `${x},${y}`;
       })
       .join(' ');
   }
 
-  // Tendencia: ultimo vs penultimo
   const ult = evolucao[evolucao.length - 1];
   const pen = evolucao[evolucao.length - 2];
-  const variacao = pen && pen.cadastrados > 0 ? (ult.cadastrados - pen.cadastrados) / pen.cadastrados : null;
+  const variacao = pen && pen.agendados > 0 ? (ult.agendados - pen.agendados) / pen.agendados : null;
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -386,11 +376,11 @@ function EvolucaoMensal({ evolucao }: { evolucao: MesEvolucao[] }) {
         <h2 className="text-lg font-semibold">Evolução nos últimos 6 meses</h2>
         {variacao !== null && (
           <span className={`text-xs ${variacao >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {variacao >= 0 ? '↑' : '↓'} {(variacao * 100).toFixed(0)}% cadastros vs mês anterior
+            {variacao >= 0 ? '↑' : '↓'} {(variacao * 100).toFixed(0)}% agendados vs mês anterior
           </span>
         )}
       </div>
-      <p className="text-xs text-gray-500 mb-4">Trajetória das 5 etapas, ignora filtro de data.</p>
+      <p className="text-xs text-gray-500 mb-4">Trajetória das 4 etapas, ignora filtro de data.</p>
 
       <div className="relative" style={{ height: `${h}px` }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">

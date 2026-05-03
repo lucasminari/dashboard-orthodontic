@@ -9,13 +9,11 @@ import { Skeleton } from '../components/Skeleton';
 type FunilOrigem = {
   origem: string;
   fonte: 'kommo' | 'sistema';
-  cadastrados: number;
   agendados: number;
   compareceram: number;
   fecharam: number;
   pagaram: number;
   receita: number;
-  taxa_cadastro_para_agendamento: number | null;
   taxa_agendamento_para_comparecimento: number | null;
   taxa_comparecimento_para_fechamento: number | null;
   taxa_fechamento_para_pagamento: number | null;
@@ -24,7 +22,6 @@ type FunilOrigem = {
 type RespostaFunil = {
   funis: FunilOrigem[];
   total: {
-    cadastrados: number;
     agendados: number;
     compareceram: number;
     fecharam: number;
@@ -176,8 +173,7 @@ function Section({ titulo, descricao, children }: { titulo: string; descricao?: 
 }
 
 function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
-  const linhas: { label: string; key: 'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram'; pct?: boolean }[] = [
-    { label: 'Cadastrados', key: 'cadastrados' },
+  const linhas: { label: string; key: 'agendados' | 'compareceram' | 'fecharam' | 'pagaram'; pct?: boolean }[] = [
     { label: 'Agendados', key: 'agendados' },
     { label: 'Compareceram', key: 'compareceram' },
     { label: 'Fecharam', key: 'fecharam' },
@@ -196,7 +192,6 @@ function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
           linhas={unidades}
           colunas={[
             { titulo: 'Unidade', valor: u => u.nome },
-            { titulo: 'Cadastrados', valor: u => u.funil.total.cadastrados },
             { titulo: 'Agendados', valor: u => u.funil.total.agendados },
             { titulo: 'Compareceram', valor: u => u.funil.total.compareceram },
             { titulo: 'Fecharam', valor: u => u.funil.total.fecharam },
@@ -264,12 +259,7 @@ function TabelaResumo({ unidades }: { unidades: DadosUnidade[] }) {
 function FunilCard({ u }: { u: DadosUnidade }) {
   const t = u.funil.total;
   const etapas = [
-    { nome: 'Cadastrados', valor: t.cadastrados, taxa: null as number | null },
-    {
-      nome: 'Agendados',
-      valor: t.agendados,
-      taxa: t.cadastrados > 0 ? t.agendados / t.cadastrados : null,
-    },
+    { nome: 'Agendados', valor: t.agendados, taxa: null as number | null },
     {
       nome: 'Compareceram',
       valor: t.compareceram,
@@ -328,7 +318,7 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
   // pra cada campanha os numeros de cada unidade.
   const todasOrigens = new Set<string>();
   unidades.forEach(u => u.funil.funis.forEach(f => {
-    if (f.cadastrados > 0) todasOrigens.add(f.origem);
+    if (f.agendados > 0) todasOrigens.add(f.origem);
   }));
 
   // Ordena: 5 Kommo primeiro (na ordem fixa), depois por volume total desc
@@ -339,8 +329,8 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
     if (ai !== -1 && bi !== -1) return ai - bi;
     if (ai !== -1) return -1;
     if (bi !== -1) return 1;
-    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.cadastrados || 0), 0);
-    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.cadastrados || 0), 0);
+    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.agendados || 0), 0);
+    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.agendados || 0), 0);
     return totalB - totalA;
   });
 
@@ -373,8 +363,8 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
           </thead>
           <tbody>
             {lista.map((origem, idx) => {
-              const linhas: Array<{ etapa: string; key: 'cadastrados' | 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' }> = [
-                { etapa: 'Cadastrados', key: 'cadastrados' },
+              const linhas: Array<{ etapa: string; key: 'agendados' | 'compareceram' | 'fecharam' | 'pagaram' }> = [
+                { etapa: 'Agendados', key: 'agendados' },
                 { etapa: 'Pagaram', key: 'pagaram' },
               ];
               return linhas.map((l, li) => {
@@ -428,7 +418,7 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
   // Junta todas as origens com atividade em pelo menos uma unidade
   const todasOrigens = new Set<string>();
   unidades.forEach(u => u.funil.funis.forEach(f => {
-    if (f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0) {
+    if (f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0) {
       todasOrigens.add(f.origem);
     }
   }));
@@ -444,8 +434,8 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
     if (bi !== -1) return 1;
     if (a === 'Sem origem') return 1;
     if (b === 'Sem origem') return -1;
-    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.cadastrados || 0), 0);
-    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.cadastrados || 0), 0);
+    const totalA = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === a)?.agendados || 0), 0);
+    const totalB = unidades.reduce((s, u) => s + (u.funil.funis.find(f => f.origem === b)?.agendados || 0), 0);
     return totalB - totalA;
   });
 
@@ -476,7 +466,7 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
           return {
             unidade: u,
             funil: f,
-            total: f ? f.cadastrados + f.agendados + f.compareceram + f.fecharam + f.pagaram : 0,
+            total: f ? f.agendados + f.compareceram + f.fecharam + f.pagaram : 0,
           };
         });
         const totalGeral = porUnidade.reduce((s, x) => s + x.total, 0);
@@ -497,7 +487,7 @@ function DetalheCampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
               <div className="flex items-center gap-3 text-xs">
                 {porUnidade.map(({ unidade, funil }) => (
                   <span key={unidade.unidade_id} style={{ color: unidade.cor }}>
-                    {unidade.nome.split(' ')[0]}: {funil?.cadastrados || 0}
+                    {unidade.nome.split(' ')[0]}: {funil?.agendados || 0}
                   </span>
                 ))}
               </div>
@@ -528,20 +518,17 @@ function MiniFunilUnidade({
   funil: FunilOrigem | undefined;
 }) {
   const f = funil || {
-    cadastrados: 0,
     agendados: 0,
     compareceram: 0,
     fecharam: 0,
     pagaram: 0,
     receita: 0,
-    taxa_cadastro_para_agendamento: null,
     taxa_agendamento_para_comparecimento: null,
     taxa_comparecimento_para_fechamento: null,
     taxa_fechamento_para_pagamento: null,
   };
   const etapas = [
-    { nome: 'Cadastr.', valor: f.cadastrados, taxa: null as number | null },
-    { nome: 'Agend.', valor: f.agendados, taxa: f.taxa_cadastro_para_agendamento },
+    { nome: 'Agend.', valor: f.agendados, taxa: null as number | null },
     { nome: 'Compar.', valor: f.compareceram, taxa: f.taxa_agendamento_para_comparecimento },
     { nome: 'Fechou', valor: f.fecharam, taxa: f.taxa_comparecimento_para_fechamento },
     { nome: 'Pagou', valor: f.pagaram, taxa: f.taxa_fechamento_para_pagamento },
@@ -589,13 +576,13 @@ function MiniFunilUnidade({
 
 function TopCampanhas({ u }: { u: DadosUnidade }) {
   const ativas = u.funil.funis.filter(
-    f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0,
+    f => f.agendados > 0 || f.compareceram > 0 || f.fecharam > 0 || f.pagaram > 0,
   );
   const top = [...ativas]
     .sort((a, b) => {
       if (b.pagaram !== a.pagaram) return b.pagaram - a.pagaram;
       if (b.fecharam !== a.fecharam) return b.fecharam - a.fecharam;
-      return b.cadastrados - a.cadastrados;
+      return b.agendados - a.agendados;
     })
     .slice(0, 5);
   const max = Math.max(...top.map(t => t.pagaram), 1);
@@ -614,7 +601,7 @@ function TopCampanhas({ u }: { u: DadosUnidade }) {
         <div className="space-y-2">
           {top.map(c => {
             const pct = (c.pagaram / max) * 100;
-            const taxa = c.cadastrados > 0 ? (c.fecharam / c.cadastrados) * 100 : 0;
+            const taxa = c.agendados > 0 ? (c.fecharam / c.agendados) * 100 : 0;
             return (
               <div key={c.origem}>
                 <div className="flex justify-between text-xs mb-1">
@@ -622,7 +609,7 @@ function TopCampanhas({ u }: { u: DadosUnidade }) {
                   <span className="text-gray-400 whitespace-nowrap">
                     <span className="text-emerald-400 font-semibold">{c.pagaram} pagos</span>
                     <span className="text-gray-600 mx-1">·</span>
-                    {c.cadastrados}
+                    {c.agendados}
                     {taxa > 0 && (
                       <span className="ml-1 text-gray-500">({taxa.toFixed(0)}%)</span>
                     )}
