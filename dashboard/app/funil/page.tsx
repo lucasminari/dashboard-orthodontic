@@ -106,8 +106,10 @@ export default function FunilPage() {
     carregar(unidadeId, periodoId);
   }, [unidadeId, periodoId, carregar]);
 
-  const funisKommo = dados?.funis.filter(f => f.fonte === 'kommo') || [];
-  const funisSistema = dados?.funis.filter(f => f.fonte === 'sistema') || [];
+  // Mostra tudo numa lista unica, ordenada por cadastrados desc.
+  const todosFunis = (dados?.funis || [])
+    .filter(f => f.cadastrados > 0 || f.agendados > 0 || f.compareceram > 0)
+    .sort((a, b) => b.cadastrados - a.cadastrados);
   const total = dados?.total;
 
   return (
@@ -188,21 +190,12 @@ export default function FunilPage() {
               <Card titulo="Pagaram" valor={total?.pagaram || 0} cor="emerald" />
             </div>
 
-            {/* Origens Kommo */}
+            {/* Tabela unica com todas as origens */}
             <Section
-              titulo="Origens da Kommo"
-              descricao="Leads que nascem na Kommo, agendam, e seguem o funil no sistema Orthodontic."
-              funis={funisKommo}
+              titulo="Funil por origem"
+              descricao="Caminho do lead do cadastro ao pagamento, com todas as origens."
+              funis={todosFunis}
               tiposAtualizacao={['leads', 'sistema', 'performance']}
-              unidadeId={unidadeId || undefined}
-            />
-
-            {/* Origens Sistema */}
-            <Section
-              titulo="Origens do sistema Orthodontic"
-              descricao="Leads que nascem direto no sistema Orthodontic (sem passar pela Kommo)."
-              funis={funisSistema}
-              tiposAtualizacao={['sistema', 'performance']}
               unidadeId={unidadeId || undefined}
             />
           </>

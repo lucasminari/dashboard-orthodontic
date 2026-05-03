@@ -356,8 +356,10 @@ function Funil({ dados, unidadeId }: { dados: Dados; unidadeId?: number }) {
 }
 
 function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: number }) {
-  // So mostra origens que tem ao menos 1 cadastro no periodo.
-  const ativas = origens.filter(o => o.cadastrados > 0);
+  // So mostra origens que tem ao menos 1 cadastro no periodo, ordenadas por leads desc.
+  const ativas = origens
+    .filter(o => o.cadastrados > 0)
+    .sort((a, b) => b.cadastrados - a.cadastrados);
   const max = Math.max(...ativas.map(o => o.cadastrados), 1);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
@@ -365,7 +367,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
         <h2 className="text-lg font-semibold">Leads por origem</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
-      <p className="text-xs text-gray-500 mb-6">Kommo + sistema Orthodontic, com origens unificadas</p>
+      <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
       {ativas.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem registrada para esta combinação de filtros.</div>
       ) : (
@@ -373,20 +375,10 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
           {ativas.map(o => {
             const pct = (o.cadastrados / max) * 100;
             const taxa = o.cadastrados > 0 ? (o.fecharam / o.cadastrados) * 100 : 0;
-            const corBarra = o.fonte === 'kommo' ? 'bg-indigo-500' : 'bg-emerald-500';
             return (
               <div key={o.origem}>
                 <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-300 flex items-center gap-1.5">
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                        o.fonte === 'kommo' ? 'bg-indigo-900/60 text-indigo-300' : 'bg-emerald-900/60 text-emerald-300'
-                      }`}
-                    >
-                      {o.fonte}
-                    </span>
-                    {o.origem}
-                  </span>
+                  <span className="text-gray-300">{o.origem}</span>
                   <span className="text-gray-400">
                     {o.cadastrados.toLocaleString('pt-BR')} leads
                     {o.fecharam > 0 && (
@@ -397,7 +389,7 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
                   </span>
                 </div>
                 <div className="bg-gray-800 rounded h-2 overflow-hidden">
-                  <div className={`h-full ${corBarra}`} style={{ width: `${pct}%` }} />
+                  <div className="h-full bg-indigo-500" style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
@@ -484,7 +476,7 @@ function ROIOrigem({
         <h2 className="text-lg font-semibold">Receita por origem</h2>
         <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
       </div>
-      <p className="text-xs text-gray-500 mb-6">Kommo + sistema Orthodontic, com origens unificadas</p>
+      <p className="text-xs text-gray-500 mb-6">Todas as origens, do início ao fim</p>
       {comReceita.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
       ) : (
@@ -492,7 +484,6 @@ function ROIOrigem({
           <thead className="text-xs text-gray-500 uppercase">
             <tr className="border-b border-gray-800">
               <th className="text-left py-2 font-normal">Origem</th>
-              <th className="text-left py-2 font-normal">Fonte</th>
               <th className="text-right py-2 font-normal">Leads</th>
               <th className="text-right py-2 font-normal">Fecharam</th>
               <th className="text-right py-2 font-normal">Taxa</th>
@@ -505,17 +496,6 @@ function ROIOrigem({
               return (
                 <tr key={r.origem} className="border-b border-gray-800 hover:bg-gray-800/30">
                   <td className="py-3">{r.origem}</td>
-                  <td className="py-3">
-                    <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                        r.fonte === 'kommo'
-                          ? 'bg-indigo-900/60 text-indigo-300'
-                          : 'bg-emerald-900/60 text-emerald-300'
-                      }`}
-                    >
-                      {r.fonte}
-                    </span>
-                  </td>
                   <td className="py-3 text-right text-gray-300">{r.cadastrados.toLocaleString('pt-BR')}</td>
                   <td className="py-3 text-right text-emerald-400 font-semibold">
                     {r.fecharam.toLocaleString('pt-BR')}
