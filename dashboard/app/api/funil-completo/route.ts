@@ -45,15 +45,7 @@ function novoAcumulador(): AcumuladorOrigem {
   };
 }
 
-function chavePacienteSistema(r: any): string {
-  return r.paciente_id_externo
-    ? `id:${r.paciente_id_externo}`
-    : r.telefone_norm
-      ? `tel:${r.telefone_norm}`
-      : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
-}
-
-function chavePacientePerf(r: any): string {
+function chavePaciente(r: any): string {
   return r.telefone_norm
     ? `tel:${r.telefone_norm}`
     : `nome:${(r.paciente_nome || '').toLowerCase().trim()}`;
@@ -72,29 +64,12 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
-    // ── raw_sistema (Orthodontic) ─────────────────────────────────────────
-    const sistemaRows = await buscarTudo('raw_sistema', q => {
-      let qq = q.select(
-        'origem, data_avaliacao, data_contrato, data_pgto, situacao, telefone_norm, paciente_id_externo, paciente_nome, vlr_contrato, unidade_id',
-      );
-      if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
-      return qq;
-    });
-
-    // Helpers de filtro de periodo
-    const noPeriodo = (data: string | null | undefined): boolean => {
-      if (!data) return false;
-      const d = data.slice(0, 10);
-      if (dataInicio && d < dataInicio) return false;
-      if (dataFim && d > dataFim) return false;
-      return true;
-    };
-    const semFiltro = !dataInicio && !dataFim;
-
-    // ── raw_performance (Telemarketing) ───────────────────────────────────
+    // ── raw_performance: fonte unica da verdade ──────────────────────────
+    // Performance traz: data, status, compareceu, pagou, valor, origem,
+    // telemarketing. Tudo que precisamos pro funil + receita.
     const perfRows = await buscarTudo('raw_performance', q => {
       let qq = q.select(
-        'origem, compareceu, status, telefone_norm, paciente_nome, data, unidade_id',
+        'origem, compareceu, pagou, valor, telefone_norm, paciente_nome, data, unidade_id, telemarketing',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
       if (dataInicio) qq = qq.gte('data', dataInicio);
@@ -111,55 +86,29 @@ export async function GET(request: NextRequest) {
     // Garante visibilidade das 5 origens Kommo mesmo sem dados
     for (const c of ORIGENS_KOMMO_CANONICAS) get(c);
 
-    // ── Agendados / Pagaram (raw_sistema, filtro por etapa) ──────────────
-    // Como o arquivo agora contem so contratos PAGOS (filtro 'Data de
-    // Pagamento' no Orthodontic), 'fecharam' == 'pagaram'. Usamos so
-    // pagaram daqui pra frente.
-    for (const r of sistemaRows || []) {
-      const origem = mapearOrigem(r.origem);
-      const a = get(origem);
-      const k = chavePacienteSistema(r);
-      if (r.data_avaliacao && (semFiltro || noPeriodo(r.data_avaliacao))) {
-        a.agendados.add(k);
+    // Cada linha do Performance = 1 atendimento de telemarketing.
+    // Deduplica por telefone (mesmo paciente pode ter varios atendimentos).
+    for (const r of perfRows || []) {
+      // Origem: prefere o campo origem; se vier vazio/desconhecido, tenta o
+      // telemarketing (UPDONTIC etc. aparece como telemarketer).
+      let origem = mapearOrigem(r.origem);
+      if (origem === ROTULO_SEM_ORIGEM) {
+        const fallback = mapearOrigem(r.telemarketing);
+        if (fallback !== ROTULO_SEM_ORIGEM) origem = fallback;
       }
-      if (r.data_pgto && (semFiltro || noPeriodo(r.data_pgto))) {
+      const a = get(origem);
+      const k = chavePaciente(r);
+
+      // Toda linha conta como agendamento (paciente foi pra agenda)
+      a.agendados.add(k);
+
+      if (r.compareceu) a.compareceram.add(k);
+
+      if (r.pagou) {
         if (!a.pagaram.has(k)) {
-          a.receita += Number(r.vlr_contrato) || 0;
+          a.receita += Number(r.valor) || 0;
         }
         a.pagaram.add(k);
-      }
-    }
-
-    // Pacientes do raw_performance tambem entram em agendados (foram
-    // atendidos pelo telemarketing → agendaram em algum momento)
-    for (const r of perfRows || []) {
-      const origem = mapearOrigem(r.origem);
-      const a = get(origem);
-      const k = chavePacientePerf(r);
-      if (semFiltro || noPeriodo(r.data)) {
-        a.agendados.add(k);
-      }
-    }
-
-    // ── Compareceram (raw_performance, com fallback no raw_sistema) ───────
-    for (const r of perfRows || []) {
-      if (!r.compareceu) continue;
-      if (!semFiltro && !noPeriodo(r.data)) continue;
-      const origem = mapearOrigem(r.origem);
-      get(origem).compareceram.add(chavePacientePerf(r));
-    }
-    // Fallback: se origem tem agendados mas zero compareceram, infere do
-    // raw_sistema (paciente avaliado e nao faltou).
-    for (const [origem, a] of acc.entries()) {
-      if (a.compareceram.size > 0 || a.agendados.size === 0) continue;
-      for (const r of sistemaRows || []) {
-        const o = mapearOrigem(r.origem);
-        if (o !== origem) continue;
-        if (!r.data_avaliacao) continue;
-        if (!semFiltro && !noPeriodo(r.data_avaliacao)) continue;
-        const sit = String(r.situacao || '').toLowerCase();
-        if (sit.includes('faltou') || sit.includes('cancel')) continue;
-        a.compareceram.add(chavePacienteSistema(r));
       }
     }
 
@@ -173,7 +122,7 @@ export async function GET(request: NextRequest) {
         origem,
         fonte: isOrigemKommo(origem) ? 'kommo' : 'sistema',
         cadastrados: agendados, // legado
-        fecharam: pagaram, // legado: arquivo so contem pagos
+        fecharam: pagaram, // legado
         agendados,
         compareceram,
         pagaram,
@@ -218,7 +167,6 @@ export async function GET(request: NextRequest) {
       funis,
       total,
       contagem: {
-        sistema: sistemaRows?.length || 0,
         performance: perfRows?.length || 0,
       },
     });

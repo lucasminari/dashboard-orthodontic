@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 
 // Retorna a data/hora da ultima ingestao concluida para cada tipo
-// (leads, sistema, performance, campanhas).
+// (leads, performance). Campos sistema/campanhas mantidos como null pra
+// compat retroativa com componentes antigos.
 // Se unidade_id for passado, considera apenas aquela unidade. Caso contrario,
 // retorna a ingestao MAIS ANTIGA entre as unidades (a mais defasada),
 // porque o usuario quer saber "ate que ponto os numeros estao atualizados".

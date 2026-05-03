@@ -50,7 +50,7 @@ export default function Navbar() {
           <div className="md:ml-auto flex items-center gap-2 md:gap-3 flex-wrap">
             <span className="hidden lg:block">
               <AtualizadoEm
-                tipos={['leads', 'sistema', 'performance']}
+                tipos={['performance']}
                 unidadeId={unidadeId || undefined}
                 compacto
               />

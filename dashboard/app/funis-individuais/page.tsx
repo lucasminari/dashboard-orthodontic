@@ -131,7 +131,7 @@ export default function FunisIndividuaisPage() {
           </p>
           <div className="mt-2">
             <AtualizadoEm
-              tipos={['leads', 'sistema', 'performance']}
+              tipos={['performance']}
               unidadeId={unidadeId || undefined}
             />
           </div>

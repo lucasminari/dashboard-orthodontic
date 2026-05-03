@@ -204,8 +204,8 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
   const enviarArquivos = async () => {
     if (!unidadeId) return;
-    // 2 obrigatorios: sistema, performance. Leads é opcional.
-    const obrigatorios = ['sistema', 'performance'];
+    // Performance eh a unica fonte. Sistema e Leads sao opcionais (compat).
+    const obrigatorios = ['performance'];
     const faltando = obrigatorios.filter(t => !arquivos[t]);
     if (faltando.length > 0) {
       setErroUpload(`Faltam arquivos: ${faltando.join(', ')}`);
@@ -400,7 +400,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <div className="space-y-2">
                 <div className="text-sm font-medium text-gray-300 mb-3">Arquivos selecionados:</div>
-                {['sistema', 'performance'].map(tipo => (
+                {['performance'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-2 text-sm">
                     <div className={`w-4 h-4 rounded border ${arquivos[tipo] ? 'bg-blue-500 border-blue-500' : 'border-gray-600'}`}>
                       {arquivos[tipo] && <div className="text-white text-xs flex items-center justify-center h-full">✓</div>}
@@ -429,7 +429,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
               <button
                 onClick={enviarArquivos}
-                disabled={enviando || !arquivos.sistema || !arquivos.performance}
+                disabled={enviando || !arquivos.performance}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg transition"
               >
                 {enviando ? 'Enviando...' : 'Enviar Arquivos'}
@@ -577,27 +577,9 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               </div>
 
               <div className="space-y-4 text-sm">
-                <div className="border-l-2 border-cyan-500 pl-4 py-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-cyan-100">1️⃣ Sistema (Contratos)</div>
-                    <a
-                      href="https://franquias.orthodonticbrasil.com/relatorios_campanha_01"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs bg-cyan-600 hover:bg-cyan-700 px-3 py-1 rounded text-white font-medium transition"
-                    >
-                      Abrir Relatório →
-                    </a>
-                  </div>
-                  <div className="text-gray-400 text-xs space-y-1 mb-2">
-                    <p><strong>Filtro:</strong> Status = Contratos por Data de Pagamento, Plano = Ortodontia, Período = mês corrente até hoje</p>
-                    <p><strong>Arquivo:</strong> Selecionar (azul) → Excel → baixe diretamente (sem renomear)</p>
-                  </div>
-                </div>
-
                 <div className="border-l-2 border-purple-500 pl-4 py-2">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-purple-100">2️⃣ Performance</div>
+                    <div className="font-semibold text-purple-100">📊 Performance (única fonte)</div>
                     <a
                       href="https://franquias.orthodonticbrasil.com/comercial_relatorio_performance"
                       target="_blank"
@@ -613,14 +595,13 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                     <p className="text-amber-300">⚠️ Este arquivo é CSV (não Excel)</p>
                   </div>
                 </div>
-
               </div>
 
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-2"><strong>Após exportar os 2 arquivos:</strong></p>
+                <p className="text-xs text-gray-400 mb-2"><strong>Após exportar:</strong></p>
                 <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-                  <li>Use a seção <strong>Upload de Arquivos</strong> acima para enviar os 2 arquivos</li>
-                  <li>Os dados serão processados automaticamente e o dashboard atualizará em poucos segundos</li>
+                  <li>Use a seção <strong>Upload de Arquivos</strong> acima pra enviar o Performance</li>
+                  <li>Dados processados automaticamente e dashboard atualiza em segundos</li>
                 </ol>
               </div>
             </div>

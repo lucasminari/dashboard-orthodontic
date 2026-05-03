@@ -94,7 +94,7 @@ export default function ComparativoPage() {
             {periodoAtual} — Centro, Várzea Paulista e Hortolândia lado a lado.
           </p>
           <div className="mt-2">
-            <AtualizadoEm tipos={['leads', 'sistema', 'performance']} />
+            <AtualizadoEm tipos={['performance']} />
           </div>
         </header>
 

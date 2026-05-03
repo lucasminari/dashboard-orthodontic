@@ -3,9 +3,11 @@ import { processarArquivos } from '@/lib/parsers';
 
 export const dynamic = 'force-dynamic';
 
-// 'leads' é opcional desde a remoção da etapa "Cadastrados" — só usado
-// historicamente. Os 2 tipos abaixo sao obrigatorios.
-const TIPOS_OBRIGATORIOS = ['sistema', 'performance'];
+// 'performance' eh a unica fonte de dados analiticos — tem agendado,
+// compareceu, fechou, pagou, valor, origem, telemarketing tudo num arquivo.
+// 'sistema' e 'leads' sao aceitos pra compat retroativa mas nao sao mais
+// consultados pelas APIs.
+const TIPOS_OBRIGATORIOS = ['performance'];
 const TIPOS_ACEITOS = ['leads', 'sistema', 'performance'];
 const EXTENSOES_VALIDAS: Record<string, string[]> = {
   leads: ['xlsx'],

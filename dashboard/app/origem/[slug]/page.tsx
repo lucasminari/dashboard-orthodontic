@@ -138,7 +138,7 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
           </p>
           <div className="mt-2">
             <AtualizadoEm
-              tipos={['leads', 'sistema', 'performance']}
+              tipos={['performance']}
               unidadeId={unidadeId || undefined}
             />
           </div>

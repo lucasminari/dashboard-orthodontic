@@ -1,15 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { buscarTudo } from '@/lib/supabase-paginar';
-import { mapearOrigem } from '@/lib/origem-mapeamento';
+import { mapearOrigem, ROTULO_SEM_ORIGEM } from '@/lib/origem-mapeamento';
 
 export const dynamic = 'force-dynamic';
 
 // Retorna, para cada origem, a serie de AGENDAMENTOS nos ultimos 6 meses
 // e a variacao % do mes atual em relacao ao mes anterior.
 //
-// Antes usavamos cadastros (raw_leads), mas o foco do dashboard agora eh
-// do agendamento em diante. Tendencia = quantos agendamentos novos por mes
-// pra cada origem.
+// Fonte unica: raw_performance (cada linha = 1 atendimento de telemarketing
+// = 1 agendamento). Origem do paciente vem do campo `origem` do Performance.
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,10 +23,10 @@ export async function GET(request: NextRequest) {
     }
     const dataMin = `${meses[0]}-01`;
 
-    const sistemaRows = await buscarTudo('raw_sistema', q => {
+    const perfRows = await buscarTudo('raw_performance', q => {
       let qq = q
-        .select('origem, data_avaliacao, telefone_norm, paciente_id_externo, paciente_nome, unidade_id')
-        .gte('data_avaliacao', dataMin);
+        .select('origem, telemarketing, data, telefone_norm, paciente_nome, unidade_id')
+        .gte('data', dataMin);
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
       return qq;
     });
@@ -42,14 +41,16 @@ export async function GET(request: NextRequest) {
       mp.get(mes)!.add(chave);
     }
 
-    for (const r of sistemaRows || []) {
-      const origem = mapearOrigem(r.origem);
-      const mes = (r.data_avaliacao || '').slice(0, 7);
-      const chave = r.paciente_id_externo
-        ? `id:${r.paciente_id_externo}`
-        : r.telefone_norm
-          ? `tel:${r.telefone_norm}`
-          : `nome:${(r.paciente_nome || '').toLowerCase()}`;
+    for (const r of perfRows || []) {
+      let origem = mapearOrigem(r.origem);
+      if (origem === ROTULO_SEM_ORIGEM) {
+        const fb = mapearOrigem(r.telemarketing);
+        if (fb !== ROTULO_SEM_ORIGEM) origem = fb;
+      }
+      const mes = (r.data || '').slice(0, 7);
+      const chave = r.telefone_norm
+        ? `tel:${r.telefone_norm}`
+        : `nome:${(r.paciente_nome || '').toLowerCase()}`;
       add(origem, mes, chave);
     }
 
