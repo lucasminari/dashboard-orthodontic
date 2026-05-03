@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { AtualizadoEm } from '../components/AtualizadoEm';
 
 type FunilOrigem = {
   origem: string;
@@ -117,6 +118,12 @@ export default function FunilPage() {
           <p className="text-gray-400 text-sm mt-1">
             Caminho do lead do cadastro ao pagamento, juntando dados da Kommo e do sistema Orthodontic.
           </p>
+          <div className="mt-2">
+            <AtualizadoEm
+              tipos={['leads', 'sistema', 'performance']}
+              unidadeId={unidadeId || undefined}
+            />
+          </div>
         </header>
 
         {/* Filtros */}
@@ -186,6 +193,8 @@ export default function FunilPage() {
               titulo="Origens da Kommo"
               descricao="Leads que nascem na Kommo, agendam, e seguem o funil no sistema Orthodontic."
               funis={funisKommo}
+              tiposAtualizacao={['leads', 'sistema', 'performance']}
+              unidadeId={unidadeId || undefined}
             />
 
             {/* Origens Sistema */}
@@ -193,6 +202,8 @@ export default function FunilPage() {
               titulo="Origens do sistema Orthodontic"
               descricao="Leads que nascem direto no sistema Orthodontic (sem passar pela Kommo)."
               funis={funisSistema}
+              tiposAtualizacao={['sistema', 'performance']}
+              unidadeId={unidadeId || undefined}
             />
           </>
         )}
@@ -221,17 +232,26 @@ function Section({
   titulo,
   descricao,
   funis,
+  tiposAtualizacao,
+  unidadeId,
 }: {
   titulo: string;
   descricao: string;
   funis: FunilOrigem[];
+  tiposAtualizacao?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
+  unidadeId?: number;
 }) {
   if (funis.length === 0) return null;
   return (
     <section className="mb-10">
-      <div className="mb-3">
-        <h2 className="text-xl font-semibold">{titulo}</h2>
-        <p className="text-gray-400 text-sm">{descricao}</p>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">{titulo}</h2>
+          <p className="text-gray-400 text-sm">{descricao}</p>
+        </div>
+        {tiposAtualizacao && (
+          <AtualizadoEm tipos={tiposAtualizacao} unidadeId={unidadeId} />
+        )}
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

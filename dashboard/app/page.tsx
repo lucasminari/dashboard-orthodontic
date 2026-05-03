@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { AtualizadoEm } from './components/AtualizadoEm';
 
 type Dados = {
   funil: { leads: number; agendados: number; compareceram: number; fecharam: number; pagaram: number };
@@ -142,6 +143,12 @@ export default function Home() {
         <div>
           <h1 className="text-3xl font-bold mb-1">Painel comercial</h1>
           <p className="text-gray-400">OrthoDontic — {unidadeAtual} · {periodoAtual}</p>
+          <div className="mt-2">
+            <AtualizadoEm
+              tipos={['leads', 'sistema', 'performance', 'campanhas']}
+              unidadeId={unidadeId || undefined}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {carregando && <span className="text-xs text-gray-500 mr-2">atualizando...</span>}
@@ -190,27 +197,28 @@ export default function Home() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <Card label="Leads"        valor={dados.funil.leads.toLocaleString('pt-BR')} />
-            <Card label="Agendados"    valor={dados.funil.agendados.toLocaleString('pt-BR')} />
-            <Card label="Fecharam"     valor={dados.funil.fecharam.toLocaleString('pt-BR')} />
-            <Card label="Pagaram"      valor={dados.funil.pagaram.toLocaleString('pt-BR')} />
-            <Card label="Receita"      valor={`R$ ${fmtBR(dados.financeiro.receita_realizada)}`} sub={`+ R$ ${fmtBR(dados.financeiro.pipeline_futuro)} pipeline`} />
+            <Card label="Leads"        valor={dados.funil.leads.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['leads']} />
+            <Card label="Agendados"    valor={dados.funil.agendados.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
+            <Card label="Fecharam"     valor={dados.funil.fecharam.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
+            <Card label="Pagaram"      valor={dados.funil.pagaram.toLocaleString('pt-BR')} unidadeId={unidadeId} tipos={['sistema']} />
+            <Card label="Receita"      valor={`R$ ${fmtBR(dados.financeiro.receita_realizada)}`} sub={`+ R$ ${fmtBR(dados.financeiro.pipeline_futuro)} pipeline`} unidadeId={unidadeId} tipos={['sistema']} />
           </div>
 
           <Comparativo unidades={comparativo} fmtBR={fmtBR} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Funil dados={dados} />
-            <Origens origens={origens} />
+            <Funil dados={dados} unidadeId={unidadeId} />
+            <Origens origens={origens} unidadeId={unidadeId} />
           </div>
 
-          <ROIOrigem roiOrigem={roiOrigem} fmtBR={fmtBR} />
+          <ROIOrigem roiOrigem={roiOrigem} fmtBR={fmtBR} unidadeId={unidadeId} />
 
           <Lembretes
             lembretes={lembretes}
             corUrgencia={corUrgencia}
             textoVcto={textoVcto}
             fmtBR={fmtBR}
+            unidadeId={unidadeId}
           />
         </>
       )}
@@ -218,12 +226,29 @@ export default function Home() {
   );
 }
 
-function Card({ label, valor, sub }: { label: string; valor: string; sub?: string }) {
+function Card({
+  label,
+  valor,
+  sub,
+  unidadeId,
+  tipos,
+}: {
+  label: string;
+  valor: string;
+  sub?: string;
+  unidadeId?: number;
+  tipos?: ('leads' | 'sistema' | 'performance' | 'campanhas')[];
+}) {
   return (
     <div className="bg-gray-900 rounded-lg p-5 border border-gray-800">
       <div className="text-sm text-gray-400 mb-2">{label}</div>
       <div className="text-2xl font-semibold">{valor}</div>
       {sub && <div className="text-xs text-gray-500 mt-1">{sub}</div>}
+      {tipos && (
+        <div className="mt-2 pt-2 border-t border-gray-800">
+          <AtualizadoEm tipos={tipos} unidadeId={unidadeId || undefined} compacto />
+        </div>
+      )}
     </div>
   );
 }
@@ -233,7 +258,10 @@ function Comparativo({ unidades, fmtBR }: { unidades: ComparativoUnidade[]; fmtB
   const cores = ['#6366f1', '#8b5cf6', '#22c55e'];
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
-      <h2 className="text-lg font-semibold mb-1">Comparativo entre unidades</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-lg font-semibold">Comparativo entre unidades</h2>
+        <AtualizadoEm tipos={['leads', 'sistema', 'performance']} />
+      </div>
       <p className="text-xs text-gray-500 mb-6">Leads do Kommo · cruzamento com OrthoDontic · sempre mostra dado total</p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {unidades.map((u, i) => {
@@ -276,7 +304,7 @@ function Linha({ label, valor }: { label: string; valor: string }) {
   );
 }
 
-function Funil({ dados }: { dados: Dados }) {
+function Funil({ dados, unidadeId }: { dados: Dados; unidadeId?: number }) {
   const f = dados.funil;
   const etapas = [
     { nome: 'Leads',        valor: f.leads,        cor: '#6366f1' },
@@ -288,7 +316,10 @@ function Funil({ dados }: { dados: Dados }) {
   const max = Math.max(...etapas.map(e => e.valor));
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <h2 className="text-lg font-semibold mb-6">Funil de conversão</h2>
+      <div className="flex items-start justify-between mb-6">
+        <h2 className="text-lg font-semibold">Funil de conversão</h2>
+        <AtualizadoEm tipos={['leads', 'sistema', 'performance']} unidadeId={unidadeId || undefined} />
+      </div>
       <div className="space-y-3">
         {etapas.map((e, i) => {
           const pct = max > 0 ? (e.valor / max) * 100 : 0;
@@ -312,11 +343,14 @@ function Funil({ dados }: { dados: Dados }) {
   );
 }
 
-function Origens({ origens }: { origens: Origem[] }) {
+function Origens({ origens, unidadeId }: { origens: Origem[]; unidadeId?: number }) {
   const max = Math.max(...origens.map(o => o.leads), 1);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-      <h2 className="text-lg font-semibold mb-1">Leads por origem</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-lg font-semibold">Leads por origem</h2>
+        <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
+      </div>
       <p className="text-xs text-gray-500 mb-6">Fonte: Kommo · cruzado com OrthoDontic</p>
       {origens.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem registrada para esta combinação de filtros.</div>
@@ -348,12 +382,13 @@ function Origens({ origens }: { origens: Origem[] }) {
 }
 
 function Lembretes({
-  lembretes, corUrgencia, textoVcto, fmtBR,
+  lembretes, corUrgencia, textoVcto, fmtBR, unidadeId,
 }: {
   lembretes: Lembrete[];
   corUrgencia: (u: 'alta' | 'media' | 'baixa') => string;
   textoVcto: (d: number) => string;
   fmtBR: (n: number) => string;
+  unidadeId?: number;
 }) {
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
@@ -361,6 +396,9 @@ function Lembretes({
         <div>
           <h2 className="text-lg font-semibold">Lembretes de pagamento futuro</h2>
           <p className="text-xs text-gray-500">Contratos fechados aguardando pagamento (sempre mostra todos)</p>
+          <div className="mt-1">
+            <AtualizadoEm tipos={['sistema']} unidadeId={unidadeId || undefined} />
+          </div>
         </div>
         <span className="text-sm text-gray-400">
           {lembretes.length} {lembretes.length === 1 ? 'pendência' : 'pendências'}
@@ -400,10 +438,13 @@ function Lembretes({
   );
 }
 
-function ROIOrigem({ roiOrigem, fmtBR }: { roiOrigem: ROIOrigem[]; fmtBR: (n: number) => string }) {
+function ROIOrigem({ roiOrigem, fmtBR, unidadeId }: { roiOrigem: ROIOrigem[]; fmtBR: (n: number) => string; unidadeId?: number }) {
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
-      <h2 className="text-lg font-semibold mb-1">Receita por origem</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-lg font-semibold">Receita por origem</h2>
+        <AtualizadoEm tipos={['leads', 'sistema']} unidadeId={unidadeId || undefined} />
+      </div>
       <p className="text-xs text-gray-500 mb-6">Leads do Kommo cruzados com OrthoDontic</p>
       {roiOrigem.length === 0 ? (
         <div className="text-gray-500 text-sm py-4">Nenhuma origem com receita registrada.</div>
