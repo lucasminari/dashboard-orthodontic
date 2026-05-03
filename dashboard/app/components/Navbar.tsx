@@ -2,19 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { FiltrosHeader } from './FiltrosHeader';
+import { useFiltros } from './useFiltros';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { unidadeId, periodoId, setUnidadeId, setPeriodoId, pronto } = useFiltros();
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
     return pathname.startsWith(path);
   };
 
+  // Em /import e /origem, esconde os filtros (telas tem logica propria)
+  const mostraFiltros =
+    pronto && !pathname.startsWith('/import') && !pathname.startsWith('/origem');
+  const semUnidade = pathname.startsWith('/comparativo');
+
   return (
     <nav className="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
-      <div className="px-8 py-4 flex items-center gap-8">
-        <div className="flex gap-6">
+      <div className="px-6 md:px-8 py-3 flex items-center gap-6 flex-wrap">
+        <div className="flex gap-4 md:gap-6 flex-wrap">
           <Link
             href="/"
             className={`text-sm font-medium transition-colors ${
@@ -56,6 +64,17 @@ export default function Navbar() {
             Relatórios
           </Link>
         </div>
+        {mostraFiltros && (
+          <div className="ml-auto">
+            <FiltrosHeader
+              unidadeId={unidadeId}
+              periodoId={periodoId}
+              setUnidadeId={setUnidadeId}
+              setPeriodoId={setPeriodoId}
+              semUnidade={semUnidade}
+            />
+          </div>
+        )}
       </div>
     </nav>
   );

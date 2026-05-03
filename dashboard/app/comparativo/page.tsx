@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { AtualizadoEm } from '../components/AtualizadoEm';
+import { useFiltros, PERIODOS } from '../components/useFiltros';
 
 type FunilOrigem = {
   origem: string;
@@ -37,40 +38,11 @@ type DadosUnidade = {
   funil: RespostaFunil;
 };
 
-const UNIDADES = [
+const UNIDADES_COMP = [
   { id: 1, nome: 'Centro', cor: '#6366f1' },
   { id: 2, nome: 'Várzea Paulista', cor: '#a855f7' },
   { id: 3, nome: 'Hortolândia', cor: '#22c55e' },
 ];
-
-const PERIODOS = [
-  { id: 'tudo', nome: 'Tudo' },
-  { id: 'hoje', nome: 'Hoje' },
-  { id: '7d', nome: 'Últimos 7 dias' },
-  { id: '30d', nome: 'Mês anterior' },
-  { id: 'mes', nome: 'Este mês' },
-];
-
-function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
-  const hoje = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (id === 'hoje') return { desde: fmt(hoje), ate: fmt(hoje) };
-  if (id === '7d') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 7);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === '30d') {
-    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    const ultimoDiaAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    return { desde: fmt(mesAnterior), ate: fmt(ultimoDiaAnterior) };
-  }
-  if (id === 'mes') {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  return {};
-}
 
 function fmtBR(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -82,22 +54,22 @@ function fmtPct(v: number | null): string {
 }
 
 export default function ComparativoPage() {
-  const [periodoId, setPeriodoId] = useState('mes');
+  const { periodoId, intervalo, pronto } = useFiltros('mes');
   const [unidades, setUnidades] = useState<DadosUnidade[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const periodoAtual = PERIODOS.find(p => p.id === periodoId)?.nome ?? '';
 
-  const carregar = useCallback(async (pId: string) => {
+  const carregar = useCallback(async (desde?: string, ate?: string) => {
     setCarregando(true);
     setErro(null);
-    const intervalo = intervaloPeriodo(pId);
 
     try {
-      const promessas = UNIDADES.map(async u => {
+      const promessas = UNIDADES_COMP.map(async u => {
         const params = new URLSearchParams();
         params.set('unidade_id', String(u.id));
-        if (intervalo.desde) params.set('data_inicio', intervalo.desde);
-        if (intervalo.ate) params.set('data_fim', intervalo.ate);
+        if (desde) params.set('data_inicio', desde);
+        if (ate) params.set('data_fim', ate);
         const res = await fetch(`/api/funil-completo?${params.toString()}`);
         const json = await res.json();
         if (!res.ok) throw new Error(`${u.nome}: ${json.error || 'erro'}`);
@@ -113,37 +85,22 @@ export default function ComparativoPage() {
   }, []);
 
   useEffect(() => {
-    carregar(periodoId);
-  }, [periodoId, carregar]);
+    if (!pronto) return;
+    carregar(intervalo.desde, intervalo.ate);
+  }, [periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
 
   return (
     <main className="min-h-screen bg-black text-white p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
+        <header className="mb-6">
           <h1 className="text-3xl font-semibold tracking-tight">Comparativo entre unidades</h1>
           <p className="text-gray-400 text-sm mt-1">
-            Centro, Várzea Paulista e Hortolândia lado a lado, do cadastro ao pagamento.
+            {periodoAtual} — Centro, Várzea Paulista e Hortolândia lado a lado.
           </p>
           <div className="mt-2">
             <AtualizadoEm tipos={['leads', 'sistema', 'performance']} />
           </div>
         </header>
-
-        {/* Filtro de periodo */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Período</label>
-            <select
-              value={periodoId}
-              onChange={e => setPeriodoId(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            >
-              {PERIODOS.map(p => (
-                <option key={p.id} value={p.id}>{p.nome}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
         {carregando && <div className="text-gray-400">Carregando...</div>}
         {erro && (
@@ -420,11 +377,11 @@ function CampanhaPorUnidade({ unidades }: { unidades: DadosUnidade[] }) {
                         <td
                           key={u.unidade_id}
                           className={`px-4 py-2 text-right tabular-nums ${
-                            v === 0 ? 'text-gray-700' : isMax ? 'font-semibold' : 'text-gray-300'
+                            v === 0 ? 'text-gray-800' : isMax ? 'font-semibold' : 'text-gray-300'
                           }`}
                           style={isMax ? { color: u.cor } : undefined}
                         >
-                          {v === 0 ? '—' : v.toLocaleString('pt-BR')}
+                          {v === 0 ? '·' : v.toLocaleString('pt-BR')}
                         </td>
                       );
                     })}

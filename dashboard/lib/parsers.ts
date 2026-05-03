@@ -137,9 +137,24 @@ function parseCSVLine(linha: string, sep: string = ';'): string[] {
   return out.map(s => s.trim());
 }
 
+// Decodifica buffer detectando encoding: tenta UTF-8 com BOM, senao testa
+// se o resultado UTF-8 tem replacement chars; se sim, cai pra Windows-1252.
+function decodeBufferAuto(buffer: ArrayBuffer): string {
+  // Tenta UTF-8 primeiro
+  const utf8 = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  if (!utf8.includes('�')) return utf8.replace(/^﻿/, '');
+  // Fallback: Windows-1252 (ISO-8859-1 estendido — comum em exports BR)
+  try {
+    const win = new TextDecoder('windows-1252', { fatal: false }).decode(buffer);
+    return win.replace(/^﻿/, '');
+  } catch {
+    return utf8.replace(/^﻿/, '');
+  }
+}
+
 async function lerCSVPerformance(file: File): Promise<any[]> {
-  let texto = await file.text();
-  texto = texto.replace(/^﻿/, ''); // remove BOM
+  const buffer = await file.arrayBuffer();
+  const texto = decodeBufferAuto(buffer);
   const linhas = texto.split(/\r?\n/).filter(l => l.trim());
   if (linhas.length < 2) return [];
 

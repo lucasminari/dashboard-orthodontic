@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { AtualizadoEm } from '../components/AtualizadoEm';
+import { useFiltros, UNIDADES, PERIODOS } from '../components/useFiltros';
 
 type FunilOrigem = {
   origem: string;
@@ -36,42 +37,7 @@ type RespostaTendencia = {
   origens: Record<string, { serie: number[]; variacao: number | null }>;
 };
 
-const UNIDADES = [
-  { id: 1, nome: 'Centro' },
-  { id: 2, nome: 'Várzea Paulista' },
-  { id: 3, nome: 'Hortolândia' },
-];
-
-const PERIODOS = [
-  { id: 'tudo', nome: 'Tudo' },
-  { id: 'hoje', nome: 'Hoje' },
-  { id: '7d', nome: 'Últimos 7 dias' },
-  { id: '30d', nome: 'Mês anterior' },
-  { id: 'mes', nome: 'Este mês' },
-];
-
 const ORIGENS_KOMMO = ['Mídia Real', 'DBOUT', 'PitchYes', 'Sorriso Novo', 'Galú'];
-
-function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
-  const hoje = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (id === 'hoje') return { desde: fmt(hoje), ate: fmt(hoje) };
-  if (id === '7d') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 7);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === '30d') {
-    const m = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    const u = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    return { desde: fmt(m), ate: fmt(u) };
-  }
-  if (id === 'mes') {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  return {};
-}
 
 function fmtPct(v: number | null): string {
   if (v === null || isNaN(v)) return '—';
@@ -79,21 +45,21 @@ function fmtPct(v: number | null): string {
 }
 
 export default function FunisIndividuaisPage() {
-  const [unidadeId, setUnidadeId] = useState(1);
-  const [periodoId, setPeriodoId] = useState('mes');
+  const { unidadeId, periodoId, intervalo, pronto } = useFiltros('mes');
   const [dados, setDados] = useState<RespostaFunil | null>(null);
   const [tendencia, setTendencia] = useState<RespostaTendencia | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const unidadeAtual = UNIDADES.find(u => u.id === unidadeId)?.nome ?? '';
+  const periodoAtual = PERIODOS.find(p => p.id === periodoId)?.nome ?? '';
 
-  const carregar = useCallback(async (uId: number, pId: string) => {
+  const carregar = useCallback(async (uId: number, desde?: string, ate?: string) => {
     setCarregando(true);
     setErro(null);
     const params = new URLSearchParams();
     if (uId) params.set('unidade_id', String(uId));
-    const intervalo = intervaloPeriodo(pId);
-    if (intervalo.desde) params.set('data_inicio', intervalo.desde);
-    if (intervalo.ate) params.set('data_fim', intervalo.ate);
+    if (desde) params.set('data_inicio', desde);
+    if (ate) params.set('data_fim', ate);
 
     const tParams = new URLSearchParams();
     if (uId) tParams.set('unidade_id', String(uId));
@@ -114,8 +80,9 @@ export default function FunisIndividuaisPage() {
   }, []);
 
   useEffect(() => {
-    carregar(unidadeId, periodoId);
-  }, [unidadeId, periodoId, carregar]);
+    if (!pronto) return;
+    carregar(unidadeId, intervalo.desde, intervalo.ate);
+  }, [unidadeId, periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
 
   // Mostra TODAS as campanhas individualmente — sem agrupar em "Outros".
   // Inclui qualquer campanha que tem QUALQUER atividade no periodo
@@ -163,9 +130,9 @@ export default function FunisIndividuaisPage() {
     <main className="min-h-screen bg-black text-white p-6 md:p-10">
       <div className="max-w-7xl mx-auto">
         <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">Funis individuais por campanha</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Campanhas</h1>
           <p className="text-gray-400 text-sm mt-1">
-            Funil de conversão e funil invertido lado a lado, para visualizar entrada e saída de cada campanha.
+            {unidadeAtual} · {periodoAtual} — funil de conversão e onde perde leads, por campanha.
           </p>
           <div className="mt-2">
             <AtualizadoEm
@@ -174,30 +141,6 @@ export default function FunisIndividuaisPage() {
             />
           </div>
         </header>
-
-        {/* Filtros */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-end">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Unidade</label>
-            <select
-              value={unidadeId}
-              onChange={e => setUnidadeId(Number(e.target.value))}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            >
-              {UNIDADES.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Período</label>
-            <select
-              value={periodoId}
-              onChange={e => setPeriodoId(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            >
-              {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-            </select>
-          </div>
-        </div>
 
         {carregando && <div className="text-gray-400">Carregando...</div>}
         {erro && (

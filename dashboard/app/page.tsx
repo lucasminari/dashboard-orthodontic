@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, Fragment } from 'react';
 import { AtualizadoEm } from './components/AtualizadoEm';
 import { Alertas } from './components/Alertas';
+import { useFiltros, UNIDADES, PERIODOS } from './components/useFiltros';
 
 type Dados = {
   funil: { leads: number; agendados: number; compareceram: number; fecharam: number; pagaram: number };
@@ -25,70 +26,27 @@ type Lembrete = {
   urgencia: 'alta' | 'media' | 'baixa';
 };
 
-const UNIDADES = [
-  { id: 1, nome: 'Centro' },
-  { id: 2, nome: 'Várzea Paulista' },
-  { id: 3, nome: 'Hortolândia' },
-];
-
-const PERIODOS = [
-  { id: 'tudo',  nome: 'Tudo' },
-  { id: 'hoje',  nome: 'Hoje' },
-  { id: '7d',    nome: 'Últimos 7 dias' },
-  { id: '30d',   nome: 'Mês anterior' },
-  { id: 'mes',   nome: 'Este mês' },
-  { id: 'personalizado', nome: 'Personalizado' },
-];
-
-function intervaloPeriodo(id: string): { desde?: string; ate?: string } {
-  const hoje = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (id === 'hoje') return { desde: fmt(hoje), ate: fmt(hoje) };
-  if (id === '7d') {
-    const d = new Date(hoje); d.setDate(d.getDate() - 7);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === '30d') {
-    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-    const ultimoDiaAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
-    return { desde: fmt(mesAnterior), ate: fmt(ultimoDiaAnterior) };
-  }
-  if (id === 'mes') {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  return {};
-}
-
 export default function Home() {
-  const [unidadeId, setUnidadeId] = useState(1);
-  const [periodoId, setPeriodoId] = useState('tudo');
-  const [desdePersonalizado, setDesdePersonalizado] = useState('');
-  const [atePersonalizado, setAtePersonalizado] = useState('');
+  const { unidadeId, periodoId, intervalo, pronto } = useFiltros('mes');
   const [dados, setDados] = useState<Dados | null>(null);
   const [funilOrigens, setFunilOrigens] = useState<FunilOrigem[] | null>(null);
   const [lembretes, setLembretes] = useState<Lembrete[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  const carregar = useCallback(async (uId: number, pId: string, desde?: string, ate?: string) => {
+  const carregar = useCallback(async (uId: number, desde?: string, ate?: string) => {
     setCarregando(true);
     setErro(null);
-    let intervalo: { desde?: string; ate?: string } = { desde, ate };
-    if (!desde || !ate) {
-      intervalo = intervaloPeriodo(pId);
-    }
     const params = new URLSearchParams();
     if (uId) params.set('unidade', String(uId));
-    if (intervalo.desde) params.set('desde', intervalo.desde);
-    if (intervalo.ate)   params.set('ate', intervalo.ate);
+    if (desde) params.set('desde', desde);
+    if (ate)   params.set('ate', ate);
     const q = params.toString() ? `?${params.toString()}` : '';
 
-    // /api/funil-completo usa nomes de params diferentes
     const paramsFunil = new URLSearchParams();
     if (uId) paramsFunil.set('unidade_id', String(uId));
-    if (intervalo.desde) paramsFunil.set('data_inicio', intervalo.desde);
-    if (intervalo.ate) paramsFunil.set('data_fim', intervalo.ate);
+    if (desde) paramsFunil.set('data_inicio', desde);
+    if (ate) paramsFunil.set('data_fim', ate);
     const qFunil = paramsFunil.toString() ? `?${paramsFunil.toString()}` : '';
 
     try {
@@ -111,38 +69,19 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (periodoId === 'personalizado' && (!desdePersonalizado || !atePersonalizado)) {
-      return;
-    }
-    carregar(
-      unidadeId,
-      periodoId,
-      periodoId === 'personalizado' ? desdePersonalizado : undefined,
-      periodoId === 'personalizado' ? atePersonalizado : undefined
-    );
-  }, [unidadeId, periodoId, desdePersonalizado, atePersonalizado, carregar]);
+    if (!pronto) return;
+    carregar(unidadeId, intervalo.desde, intervalo.ate);
+  }, [unidadeId, periodoId, intervalo.desde, intervalo.ate, carregar, pronto]);
 
   const fmtBR = (n: number) =>
     n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  const corUrgencia = (u: 'alta' | 'media' | 'baixa') => {
-    if (u === 'alta')  return 'bg-red-900/40 text-red-300 border-red-800';
-    if (u === 'media') return 'bg-amber-900/40 text-amber-300 border-amber-800';
-    return 'bg-gray-800 text-gray-300 border-gray-700';
-  };
-
-  const textoVcto = (dias: number) => {
-    if (dias === 0) return 'Vence hoje';
-    if (dias === 1) return 'Vence amanhã';
-    return `Em ${dias} dias`;
-  };
 
   const unidadeAtual = UNIDADES.find(u => u.id === unidadeId)?.nome ?? '';
   const periodoAtual = PERIODOS.find(p => p.id === periodoId)?.nome ?? '';
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="flex items-end justify-between mb-8 gap-4 flex-wrap">
+    <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
+      <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold mb-1">Painel comercial</h1>
           <p className="text-gray-400">OrthoDontic — {unidadeAtual} · {periodoAtual}</p>
@@ -153,44 +92,7 @@ export default function Home() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {carregando && <span className="text-xs text-gray-500 mr-2">atualizando...</span>}
-          <select
-            value={periodoId}
-            onChange={e => setPeriodoId(e.target.value)}
-            className="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-          >
-            {PERIODOS.map(p => (
-              <option key={p.id} value={p.id}>{p.nome}</option>
-            ))}
-          </select>
-          {periodoId === 'personalizado' && (
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={desdePersonalizado}
-                onChange={e => setDesdePersonalizado(e.target.value)}
-                className="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-              />
-              <span className="text-gray-400">a</span>
-              <input
-                type="date"
-                value={atePersonalizado}
-                onChange={e => setAtePersonalizado(e.target.value)}
-                className="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          )}
-          <select
-            value={unidadeId}
-            onChange={e => setUnidadeId(Number(e.target.value))}
-            className="bg-gray-900 border border-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
-          >
-            {UNIDADES.map(u => (
-              <option key={u.id} value={u.id}>{u.nome}</option>
-            ))}
-          </select>
-        </div>
+        {carregando && <span className="text-xs text-gray-500">atualizando...</span>}
       </div>
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
@@ -216,8 +118,6 @@ export default function Home() {
 
           <Lembretes
             lembretes={lembretes}
-            corUrgencia={corUrgencia}
-            textoVcto={textoVcto}
             fmtBR={fmtBR}
             unidadeId={unidadeId}
           />
@@ -423,21 +323,50 @@ function Origens({ origens, unidadeId }: { origens: FunilOrigem[]; unidadeId?: n
   );
 }
 
+// Cor do badge de vencimento por proximidade do prazo (alerta granular).
+function corBadgeVencimento(dias: number): string {
+  if (dias <= 0) return 'bg-red-950/60 text-red-200 border-red-700/70';
+  if (dias <= 3) return 'bg-red-950/40 text-red-300 border-red-800/60';
+  if (dias <= 7) return 'bg-orange-950/40 text-orange-300 border-orange-800/60';
+  if (dias <= 14) return 'bg-amber-950/40 text-amber-300 border-amber-800/60';
+  return 'bg-gray-800/60 text-gray-400 border-gray-700/60';
+}
+
+function textoVencimento(dias: number): string {
+  if (dias < 0) return `Vencido há ${Math.abs(dias)}d`;
+  if (dias === 0) return 'Vence hoje';
+  if (dias === 1) return 'Vence amanhã';
+  return `Em ${dias} dias`;
+}
+
+// Mantem so digitos do telefone — usado para tel: e wa.me
+function digitos(tel: string): string {
+  return (tel || '').replace(/\D/g, '');
+}
+
+function linkWhatsapp(tel: string): string {
+  const d = digitos(tel);
+  if (!d) return '#';
+  // Adiciona 55 se nao comecar com codigo de pais (pelo tamanho)
+  const numero = d.length === 10 || d.length === 11 ? `55${d}` : d;
+  return `https://wa.me/${numero}`;
+}
+
 function Lembretes({
-  lembretes, corUrgencia, textoVcto, fmtBR, unidadeId,
+  lembretes, fmtBR, unidadeId,
 }: {
   lembretes: Lembrete[];
-  corUrgencia: (u: 'alta' | 'media' | 'baixa') => string;
-  textoVcto: (d: number) => string;
   fmtBR: (n: number) => string;
   unidadeId?: number;
 }) {
+  // Ordena por urgencia: vencidos primeiro, depois mais proximos
+  const ordenados = [...lembretes].sort((a, b) => a.dias_para_vencer - b.dias_para_vencer);
   return (
     <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-lg font-semibold">Lembretes de pagamento futuro</h2>
-          <p className="text-xs text-gray-500">Contratos fechados aguardando pagamento (sempre mostra todos)</p>
+          <p className="text-xs text-gray-500">Ordenado por urgência. Clique no telefone para abrir WhatsApp.</p>
           <div className="mt-1">
             <AtualizadoEm tipos={['sistema']} unidadeId={unidadeId || undefined} />
           </div>
@@ -446,33 +375,60 @@ function Lembretes({
           {lembretes.length} {lembretes.length === 1 ? 'pendência' : 'pendências'}
         </span>
       </div>
-      {lembretes.length === 0 ? (
+      {ordenados.length === 0 ? (
         <div className="text-gray-500 text-sm py-8 text-center">Nenhum pagamento pendente.</div>
       ) : (
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 uppercase">
             <tr className="border-b border-gray-800">
               <th className="text-left py-2 font-normal">Paciente</th>
-              <th className="text-left py-2 font-normal">Telefone</th>
+              <th className="text-left py-2 font-normal">Contato</th>
               <th className="text-right py-2 font-normal">Valor</th>
               <th className="text-left py-2 pl-4 font-normal">Vencimento</th>
               <th className="text-left py-2 font-normal">Atendente</th>
             </tr>
           </thead>
           <tbody>
-            {lembretes.map(l => (
-              <tr key={l.id} className="border-b border-gray-800 hover:bg-gray-800/30">
-                <td className="py-3">{l.nome}</td>
-                <td className="py-3 text-gray-400">{l.telefone}</td>
-                <td className="py-3 text-right font-semibold">R$ {fmtBR(l.valor)}</td>
-                <td className="py-3 pl-4">
-                  <span className={`px-2 py-1 rounded text-xs border ${corUrgencia(l.urgencia)}`}>
-                    {textoVcto(l.dias_para_vencer)}
-                  </span>
-                </td>
-                <td className="py-3 text-gray-400">{l.atendente ?? '—'}</td>
-              </tr>
-            ))}
+            {ordenados.map(l => {
+              const tel = l.telefone || '';
+              const temTel = digitos(tel).length >= 10;
+              return (
+                <tr key={l.id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                  <td className="py-3">{l.nome}</td>
+                  <td className="py-3">
+                    {temTel ? (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`tel:${digitos(tel)}`}
+                          className="text-gray-300 hover:text-indigo-300 transition"
+                          title="Ligar"
+                        >
+                          {tel}
+                        </a>
+                        <a
+                          href={linkWhatsapp(tel)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-emerald-400 hover:text-emerald-300 transition text-xs px-1.5 py-0.5 rounded border border-emerald-800/60 bg-emerald-950/30"
+                          title="Abrir no WhatsApp"
+                        >
+                          WhatsApp
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-right font-semibold">R$ {fmtBR(l.valor)}</td>
+                  <td className="py-3 pl-4">
+                    <span className={`px-2 py-1 rounded text-xs border ${corBadgeVencimento(l.dias_para_vencer)}`}>
+                      {textoVencimento(l.dias_para_vencer)}
+                    </span>
+                  </td>
+                  <td className="py-3 text-gray-400">{l.atendente ?? ''}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
