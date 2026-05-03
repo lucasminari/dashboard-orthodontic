@@ -26,6 +26,16 @@ export default function Navbar() {
             Painel
           </Link>
           <Link
+            href="/funil"
+            className={`text-sm font-medium transition-colors ${
+              isActive('/funil')
+                ? 'text-indigo-400'
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            Funil completo
+          </Link>
+          <Link
             href="/import"
             className={`text-sm font-medium transition-colors ${
               isActive('/import')
