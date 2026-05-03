@@ -633,10 +633,19 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                 <div className="border-l-2 border-cyan-500 pl-4 py-2">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-semibold text-cyan-100">3️⃣ Outros Colaboradores <span className="text-gray-500 text-[10px] ml-1">opcional</span></div>
+                    <a
+                      href="https://franquias.orthodonticbrasil.com/comercial_relatorio_conversao_colaborador"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs bg-cyan-600 hover:bg-cyan-700 px-3 py-1 rounded text-white font-medium transition"
+                    >
+                      Abrir Relatório →
+                    </a>
                   </div>
                   <div className="text-gray-400 text-xs space-y-1 mb-2">
                     <p>Mostra agendamentos feitos pela <strong>Recepção</strong> e outros colaboradores fora do telemarketing oficial.</p>
-                    <p><strong>Arquivo:</strong> precisa conter "OutrosColaboradores" no nome</p>
+                    <p><strong>Filtro:</strong> Período = mês corrente até hoje</p>
+                    <p><strong>Arquivo:</strong> Exportar → baixe (nome contém "OutrosColaboradores")</p>
                   </div>
                 </div>
               </div>
