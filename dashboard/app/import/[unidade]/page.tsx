@@ -463,7 +463,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
               </div>
 
               {erroUpload && (
-                <div className="bg-red-950/40 border border-red-700/60 text-red-200 rounded-lg p-3 text-sm">
+                <div className="bg-red-950/40 border border-red-700/60 text-red-200 rounded-lg p-3 text-sm whitespace-pre-line">
                   {erroUpload}
                 </div>
               )}

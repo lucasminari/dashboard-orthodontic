@@ -344,6 +344,21 @@ async function processarSistema(
   return registros.length;
 }
 
+// Tolerancia de linhas fora do mes — algumas remarcacoes podem cair em
+// dias proximos do virar do mes. Acima disso, o erro do user (mes errado
+// no dropdown ou filtro do relatorio errado) eh mais provavel.
+const TOLERANCIA_LINHAS_FORA_DO_MES = 0.05; // 5%
+
+const MESES_PT = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+function rotuloMesPt(yyyymm: string): string {
+  const [a, m] = yyyymm.split('-').map(Number);
+  return `${MESES_PT[(m || 1) - 1]} de ${a}`;
+}
+
 async function processarPerformance(
   file: File,
   dataRelatorio: string,
@@ -351,34 +366,72 @@ async function processarPerformance(
 ): Promise<number> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   const linhas = ext === 'csv' ? await lerCSVPerformance(file) : await lerXLSX(file, 0);
+
+  const linhasComDados = linhas.filter(l => l && (l['Nome'] || l['Telefone'] || l['Data']));
+
+  // ── VALIDACAO: mes das linhas vs mes_referencia escolhido no upload ──
+  // Performance tem coluna Data por linha — entao da pra validar se o
+  // arquivo bate com o mes selecionado no dropdown (ou se cobre 2 meses).
+  // Pra outros arquivos (CampanhasReport / OutrosColaboradores) nao da
+  // pra validar (sao agregados sem data por linha).
+  const mesEsperado = dataRelatorio.slice(0, 7); // YYYY-MM
+  const distribuicaoMeses: Record<string, number> = {};
+  let totalComData = 0;
+  for (const l of linhasComDados) {
+    const dataParseada = parseDataBR(l['Data']);
+    if (!dataParseada) continue;
+    totalComData++;
+    const mes = dataParseada.slice(0, 7);
+    distribuicaoMeses[mes] = (distribuicaoMeses[mes] || 0) + 1;
+  }
+
+  if (totalComData > 0) {
+    const linhasNoMesCerto = distribuicaoMeses[mesEsperado] || 0;
+    const linhasFora = totalComData - linhasNoMesCerto;
+    const taxaFora = linhasFora / totalComData;
+
+    if (taxaFora > TOLERANCIA_LINHAS_FORA_DO_MES) {
+      const dist = Object.entries(distribuicaoMeses)
+        .sort((a, b) => b[1] - a[1])
+        .map(([m, n]) => `${n} de ${rotuloMesPt(m)}`)
+        .join(', ');
+      throw new Error(
+        `Mês de referência incorreto. Você selecionou "${rotuloMesPt(mesEsperado)}" no dropdown, mas o arquivo Performance tem ${linhasFora} linhas (${(taxaFora * 100).toFixed(0)}%) fora desse mês.\n\n` +
+          `Distribuição encontrada: ${dist}.\n\n` +
+          `Verifique:\n` +
+          `1) O filtro de período no relatório do Orthodontic (deve cobrir só ${rotuloMesPt(mesEsperado)})\n` +
+          `2) O mês selecionado no dropdown da tela de upload\n\n` +
+          `Nada foi salvo. Corrija e tente de novo.`,
+      );
+    }
+  }
+
   await apagarIngestoesAnteriores(unidadeId, 'performance', dataRelatorio);
   const ingestaoId = await criarIngestao(unidadeId, 'performance', dataRelatorio, file.name);
 
-  const registros = linhas
-    .filter(l => l && (l['Nome'] || l['Telefone'] || l['Data']))
-    .map(l => {
-      const telOrig = l['Telefone'];
-      return {
-        unidade_id: unidadeId,
-        telemarketing: l['Telemarketing'] || null,
-        paciente_nome: l['Nome'] || null,
-        telefone_orig: telOrig || null,
-        telefone_norm: normalizarTelefone(telOrig),
-        data: parseDataBR(l['Data']),
-        status: l['Status'] || null,
-        compareceu: simNao(l['Compareceu']),
-        faltou: simNao(l['Faltou']),
-        remarcado: simNao(l['Remarcado']),
-        agenda_futura: simNao(l['Agenda Futura']),
-        fechou: simNao(l['Fechou']),
-        pagou: simNao(l['Pagou']),
-        valor: parseValor(l['Valor']),
-        campanha: l['Campanha'] || null,
-        origem: l['Origem'] || null,
-        acao: l['Ação'] || null,
-        ingestao_id: ingestaoId,
-      };
-    });
+  const registros = linhasComDados.map(l => {
+    const telOrig = l['Telefone'];
+    return {
+      unidade_id: unidadeId,
+      telemarketing: l['Telemarketing'] || null,
+      paciente_nome: l['Nome'] || null,
+      telefone_orig: telOrig || null,
+      telefone_norm: normalizarTelefone(telOrig),
+      data: parseDataBR(l['Data']),
+      status: l['Status'] || null,
+      compareceu: simNao(l['Compareceu']),
+      faltou: simNao(l['Faltou']),
+      remarcado: simNao(l['Remarcado']),
+      agenda_futura: simNao(l['Agenda Futura']),
+      fechou: simNao(l['Fechou']),
+      pagou: simNao(l['Pagou']),
+      valor: parseValor(l['Valor']),
+      campanha: l['Campanha'] || null,
+      origem: l['Origem'] || null,
+      acao: l['Ação'] || null,
+      ingestao_id: ingestaoId,
+    };
+  });
 
   if (registros.length > 0) {
     await inserirEmLotes('raw_performance', registros);
@@ -476,6 +529,14 @@ export async function processarArquivos(
   const processed: Record<string, number> = {};
 
   try {
+    // ORDEM IMPORTANTE: Performance PRIMEIRO porque ele faz a validacao
+    // do mes_referencia (compara datas das linhas com o mes selecionado).
+    // Se der erro, nada eh gravado nos outros arquivos.
+    if (files.performance) {
+      console.log('[parser] Processando performance:', files.performance.name);
+      processed.performance = await processarPerformance(files.performance, dataRelatorio, unidadeId);
+      console.log(`[parser] Performance: ${processed.performance} linhas`);
+    }
     if (files.leads) {
       console.log('[parser] Processando leads:', files.leads.name);
       processed.leads = await processarLeads(files.leads, dataRelatorio, unidadeId);
@@ -485,11 +546,6 @@ export async function processarArquivos(
       console.log('[parser] Processando sistema:', files.sistema.name);
       processed.sistema = await processarSistema(files.sistema, dataRelatorio, unidadeId);
       console.log(`[parser] Sistema: ${processed.sistema} linhas`);
-    }
-    if (files.performance) {
-      console.log('[parser] Processando performance:', files.performance.name);
-      processed.performance = await processarPerformance(files.performance, dataRelatorio, unidadeId);
-      console.log(`[parser] Performance: ${processed.performance} linhas`);
     }
     if (files.campanhas) {
       console.log('[parser] Processando campanhas:', files.campanhas.name);
