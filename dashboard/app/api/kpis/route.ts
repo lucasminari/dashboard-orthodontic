@@ -18,18 +18,20 @@ export async function GET(request: Request) {
     const { data: camp, error: errC } = await qCamp;
     if (errC) throw new Error(errC.message);
 
-    // Pega so a ingestao mais recente por unidade (snapshot acumulado)
-    const ingMaisRec = new Map<number, number>();
+    // Pra cada (unidade, mes_referencia) pega o snapshot mais recente
+    const ingMaisRec = new Map<string, number>();
     for (const r of camp || []) {
-      const uid = r.unidade_id as number;
-      const atual = ingMaisRec.get(uid);
+      const mes = String(r.data_relatorio).slice(0, 7);
+      const key = `${r.unidade_id}|${mes}`;
+      const atual = ingMaisRec.get(key);
       if (atual === undefined || (r.ingestao_id as number) > atual) {
-        ingMaisRec.set(uid, r.ingestao_id as number);
+        ingMaisRec.set(key, r.ingestao_id as number);
       }
     }
-    const validas = (camp || []).filter(
-      r => ingMaisRec.get(r.unidade_id as number) === r.ingestao_id,
-    );
+    const validas = (camp || []).filter(r => {
+      const mes = String(r.data_relatorio).slice(0, 7);
+      return ingMaisRec.get(`${r.unidade_id}|${mes}`) === r.ingestao_id;
+    });
     let agendados = 0, compareceram = 0, pagaram = 0;
     for (const r of validas) {
       agendados += Number(r.agendados) || 0;

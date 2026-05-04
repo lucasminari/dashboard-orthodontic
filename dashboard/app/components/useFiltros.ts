@@ -2,17 +2,20 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode, createElement } from 'react';
 
+// Filtros mensais — coerente com o CampanhasReport que eh totalizador
+// agregado por mes de referencia (escolhido no upload).
 export type PeriodoId =
   | 'tudo'
+  | 'mes'
+  | '30d'
+  | 'trimestre'
+  | 'personalizado'
+  // Legado — mantidos pro localStorage antigo nao quebrar; mapeiam pra 'mes'
   | 'hoje'
   | 'ontem'
   | '7d'
   | 'semana'
-  | '30dias'
-  | 'mes'
-  | '30d'
-  | 'trimestre'
-  | 'personalizado';
+  | '30dias';
 
 export const UNIDADES = [
   { id: 1, nome: 'Centro' },
@@ -21,14 +24,9 @@ export const UNIDADES = [
 ];
 
 export const PERIODOS: { id: PeriodoId; nome: string }[] = [
-  { id: 'hoje', nome: 'Hoje' },
-  { id: 'ontem', nome: 'Ontem' },
-  { id: '7d', nome: 'Últimos 7 dias' },
-  { id: 'semana', nome: 'Esta semana' },
   { id: 'mes', nome: 'Este mês' },
   { id: '30d', nome: 'Mês anterior' },
-  { id: '30dias', nome: 'Últimos 30 dias' },
-  { id: 'trimestre', nome: 'Este trimestre' },
+  { id: 'trimestre', nome: 'Últimos 3 meses' },
   { id: 'tudo', nome: 'Tudo' },
   { id: 'personalizado', nome: 'Personalizado…' },
 ];
@@ -48,31 +46,12 @@ function fmtData(d: Date): string {
 export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string } {
   const hoje = new Date();
   const fmt = fmtData;
-  if (id === 'hoje') return { desde: fmt(hoje), ate: fmt(hoje) };
-  if (id === 'ontem') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 1);
-    return { desde: fmt(d), ate: fmt(d) };
-  }
-  if (id === '7d') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 7);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === 'semana') {
-    const d = new Date(hoje);
-    const dia = d.getDay() || 7;
-    d.setDate(d.getDate() - (dia - 1));
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === '30dias') {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - 30);
-    return { desde: fmt(d), ate: fmt(hoje) };
-  }
-  if (id === 'mes') {
+  // Filtros legados (hoje/ontem/7d/semana/30dias) caem em 'mes' pra
+  // compat com localStorage antigo
+  if (id === 'mes' || id === 'hoje' || id === 'ontem' || id === '7d' || id === 'semana' || id === '30dias') {
     const d = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    return { desde: fmt(d), ate: fmt(hoje) };
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0); // ultimo dia do mes
+    return { desde: fmt(d), ate: fmt(fim) };
   }
   if (id === '30d') {
     const m = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
@@ -80,9 +59,10 @@ export function intervaloPeriodo(id: PeriodoId): { desde?: string; ate?: string 
     return { desde: fmt(m), ate: fmt(u) };
   }
   if (id === 'trimestre') {
-    const trimMes = Math.floor(hoje.getMonth() / 3) * 3;
-    const d = new Date(hoje.getFullYear(), trimMes, 1);
-    return { desde: fmt(d), ate: fmt(hoje) };
+    // Ultimos 3 meses (incluindo o atual)
+    const m = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
+    const u = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    return { desde: fmt(m), ate: fmt(u) };
   }
   return {};
 }

@@ -38,6 +38,18 @@ function obterDataHoje(): string {
   return `${ano}-${mes}-${dia}`;
 }
 
+// Converte 'YYYY-MM' do form pra 'YYYY-MM-01' (primeiro dia do mes).
+// Esse valor vai pra coluna data_relatorio das ingestoes — eh o que o
+// dashboard usa pra filtrar (cada upload eh um snapshot de 1 mes).
+function obterDataRelatorio(mesRef: string | null): string {
+  if (mesRef && /^\d{4}-\d{2}$/.test(mesRef)) {
+    return `${mesRef}-01`;
+  }
+  // Fallback: primeiro dia do mes atual
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 function extrairExtensao(filename: string): string {
   const parts = filename.split('.');
   return parts[parts.length - 1]?.toLowerCase() || '';
@@ -47,6 +59,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const unidadeId = formData.get('unidade_id') as string;
+    const mesRef = formData.get('mes_referencia') as string | null;
 
     if (!unidadeId) {
       return NextResponse.json({ error: 'unidade_id obrigatório' }, { status: 400 });
@@ -97,7 +110,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dataRelatorio = obterDataHoje();
+    const dataRelatorio = obterDataRelatorio(mesRef);
 
     // Processar arquivos
     const resultado = await processarArquivos(

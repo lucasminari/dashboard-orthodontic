@@ -104,6 +104,11 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
     campanhas: null,
     outros_colaboradores: null,
   });
+  // Mes de referencia: 'YYYY-MM'. Default: mes atual.
+  const [mesRef, setMesRef] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [enviando, setEnviando] = useState(false);
   const [erroUpload, setErroUpload] = useState<string | null>(null);
   const [sucessoUpload, setSucessoUpload] = useState(false);
@@ -224,6 +229,7 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
 
     const formData = new FormData();
     formData.append('unidade_id', unidadeId.toString());
+    formData.append('mes_referencia', mesRef);
     for (const [tipo, file] of Object.entries(arquivos)) {
       if (file) formData.append(tipo, file);
     }
@@ -412,6 +418,31 @@ export default function ImportUnidadePage({ params }: { params: Promise<{ unidad
                     className="hidden"
                   />
                 </label>
+              </div>
+
+              {/* Mes de referencia — qual mes os relatorios cobrem */}
+              <div className="bg-amber-950/20 border border-amber-700/40 rounded-lg p-3 mb-3">
+                <label className="block text-xs font-semibold text-amber-200 mb-1">
+                  📅 Mês de referência dos relatórios
+                </label>
+                <select
+                  value={mesRef}
+                  onChange={e => setMesRef(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-100"
+                >
+                  {Array.from({ length: 18 }).map((_, i) => {
+                    const d = new Date();
+                    d.setDate(1);
+                    d.setMonth(d.getMonth() - i + 2); // 2 meses pra frente, 15 pra tras
+                    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+                    const label = `${meses[d.getMonth()]} de ${d.getFullYear()}`;
+                    return <option key={ym} value={ym}>{label}</option>;
+                  })}
+                </select>
+                <p className="text-[10px] text-amber-300/70 mt-1">
+                  Importante: os arquivos exportados precisam ter sido gerados com filtro neste mês.
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
     const dataFim = searchParams.get('data_fim');
 
     // ── raw_campanhas: TOTAIS oficiais por (campanha+acao+origem) ─────────
-    // Cada upload eh um snapshot dos totais — pegamos a INGESTAO mais recente
-    // que cobre o periodo solicitado (data_relatorio dentro do periodo).
+    // Cada upload eh um SNAPSHOT de UM MES de referencia (data_relatorio = 1o
+    // dia do mes). Filtra uploads cujo mes esteja DENTRO do periodo solicitado.
     const campanhasRows = await buscarTudo('raw_campanhas', q => {
       let qq = q.select(
         'origem, campanha, acao, total_leads, agendados, compareceram, contratos_fechados, contratos_pagos, data_relatorio, unidade_id, ingestao_id',
@@ -55,20 +55,23 @@ export async function GET(request: NextRequest) {
       return qq;
     });
 
-    // Por (unidade_id), pega a ingestao com data_relatorio MAIS RECENTE.
-    // Cada upload eh um SNAPSHOT acumulado, entao usamos so a ingestao
-    // mais recente (nao somamos varias ingestoes pra evitar dupla contagem).
-    const ingestaoMaisRecentePorUnidade = new Map<number, number>();
+    // Pra cada (unidade_id, mes_referencia) pega so a ingestao MAIS RECENTE
+    // (caso o user tenha subido o mesmo mes 2x). Filtros multi-mes (trimestre/
+    // tudo) somam os meses — cada um com seu proprio snapshot mais recente.
+    const ingMaisRecPorMesUnidade = new Map<string, number>();
     for (const r of campanhasRows || []) {
-      const uid = r.unidade_id as number;
-      const atual = ingestaoMaisRecentePorUnidade.get(uid);
+      const mes = String(r.data_relatorio).slice(0, 7);
+      const key = `${r.unidade_id}|${mes}`;
+      const atual = ingMaisRecPorMesUnidade.get(key);
       if (atual === undefined || (r.ingestao_id as number) > atual) {
-        ingestaoMaisRecentePorUnidade.set(uid, r.ingestao_id as number);
+        ingMaisRecPorMesUnidade.set(key, r.ingestao_id as number);
       }
     }
-    const linhasValidas = (campanhasRows || []).filter(
-      r => ingestaoMaisRecentePorUnidade.get(r.unidade_id as number) === r.ingestao_id,
-    );
+    const linhasValidas = (campanhasRows || []).filter(r => {
+      const mes = String(r.data_relatorio).slice(0, 7);
+      const key = `${r.unidade_id}|${mes}`;
+      return ingMaisRecPorMesUnidade.get(key) === r.ingestao_id;
+    });
 
     // ── raw_performance: RECEITA por origem (Performance tem valor R$) ────
     const perfRows = await buscarTudo('raw_performance', q => {

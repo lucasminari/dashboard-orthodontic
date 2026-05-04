@@ -70,18 +70,20 @@ export async function GET(request: NextRequest) {
       return qq;
     });
 
-    // Pega so a ingestao mais recente por unidade (snapshot acumulado)
-    const ingMaisRecPorUnidade = new Map<number, number>();
+    // Pra cada (unidade, mes_referencia) pega o snapshot mais recente
+    const ingMaisRecPorMesUnidade = new Map<string, number>();
     for (const r of campanhasRows || []) {
-      const uid = r.unidade_id as number;
-      const atual = ingMaisRecPorUnidade.get(uid);
+      const mes = String(r.data_relatorio).slice(0, 7);
+      const key = `${r.unidade_id}|${mes}`;
+      const atual = ingMaisRecPorMesUnidade.get(key);
       if (atual === undefined || (r.ingestao_id as number) > atual) {
-        ingMaisRecPorUnidade.set(uid, r.ingestao_id as number);
+        ingMaisRecPorMesUnidade.set(key, r.ingestao_id as number);
       }
     }
-    const campanhasValidas = (campanhasRows || []).filter(
-      r => ingMaisRecPorUnidade.get(r.unidade_id as number) === r.ingestao_id,
-    );
+    const campanhasValidas = (campanhasRows || []).filter(r => {
+      const mes = String(r.data_relatorio).slice(0, 7);
+      return ingMaisRecPorMesUnidade.get(`${r.unidade_id}|${mes}`) === r.ingestao_id;
+    });
 
     // ── raw_performance: detalhe + receita ────────────────────────────────
     const perfRows = await buscarTudo('raw_performance', q => {
