@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Modal } from './Modal';
+import { GraficoLeadsPorDia } from './GraficoLeadsPorDia';
 
 interface Props {
   origem: string;
@@ -43,6 +45,7 @@ export function KommoInfo({ origem, unidadeId, dataInicio, dataFim, agendadosNoS
   const [dados, setDados] = useState<Resposta | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [modalAberto, setModalAberto] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -120,14 +123,18 @@ export function KommoInfo({ origem, unidadeId, dataInicio, dataFim, agendadosNoS
         </span>
       </div>
 
-      {/* Leads novos no periodo (geral, todas as unidades) */}
+      {/* Leads novos no periodo (geral, todas as unidades) — clicavel */}
       <div>
         <div className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">
           Leads novos no período (todas unidades)
         </div>
-        <div className="text-2xl font-bold text-white tabular-nums">
-          {dados.total_leads_novos}
-        </div>
+        <button
+          onClick={() => setModalAberto(true)}
+          className="text-2xl font-bold text-white tabular-nums hover:text-blue-300 transition cursor-pointer underline decoration-dotted decoration-blue-700/40 underline-offset-4"
+          title="Clique pra ver detalhamento dia a dia"
+        >
+          {dados.total_leads_novos} <span className="text-xs text-blue-400">📊</span>
+        </button>
         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-2 text-[11px]">
           <span className="text-gray-400">Centro:</span>
           <span className="text-gray-200 text-right tabular-nums">{dados.por_unidade.Centro}</span>
@@ -188,6 +195,22 @@ export function KommoInfo({ origem, unidadeId, dataInicio, dataFim, agendadosNoS
           <div className="text-[10px] text-gray-500">5+ dias sem avançar</div>
         </div>
       </div>
+
+      {/* Modal de detalhamento dia a dia */}
+      <Modal
+        aberto={modalAberto}
+        onFechar={() => setModalAberto(false)}
+        titulo={`Leads novos por dia — ${origem}`}
+        subtitulo={`Centro/Várzea/Hortolândia · ${dataInicio || ''} a ${dataFim || ''}`}
+        largura="lg"
+      >
+        <GraficoLeadsPorDia
+          origem={origem}
+          unidadeId={unidadeId}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+        />
+      </Modal>
     </div>
   );
 }
