@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AtualizadoEm } from '../components/AtualizadoEm';
 import { useFiltros, UNIDADES, PERIODOS } from '../components/useFiltros';
 import { Skeleton } from '../components/Skeleton';
-import { MatrizConversoes } from '../components/MatrizConversoes';
+import { AnaliseIA } from '../components/AnaliseIA';
 
 type FunilOrigem = {
   origem: string;
@@ -162,6 +162,18 @@ export default function FunisIndividuaisPage() {
                       key={f.origem}
                       f={f}
                       tendenciaOrigem={tendencia?.origens[f.origem]}
+                      unidade={unidadeAtual}
+                      periodo={periodoAtual}
+                      mediaAgendComp={
+                        dados && dados.total.agendados > 0
+                          ? dados.total.compareceram / dados.total.agendados
+                          : null
+                      }
+                      mediaCompPag={
+                        dados && dados.total.compareceram > 0
+                          ? dados.total.pagaram / dados.total.compareceram
+                          : null
+                      }
                     />
                   ))}
                 </div>
@@ -195,6 +207,18 @@ export default function FunisIndividuaisPage() {
                             key={f.origem}
                             f={f}
                             tendenciaOrigem={tendencia?.origens[f.origem]}
+                            unidade={unidadeAtual}
+                            periodo={periodoAtual}
+                            mediaAgendComp={
+                              dados && dados.total.agendados > 0
+                                ? dados.total.compareceram / dados.total.agendados
+                                : null
+                            }
+                            mediaCompPag={
+                              dados && dados.total.compareceram > 0
+                                ? dados.total.pagaram / dados.total.compareceram
+                                : null
+                            }
                           />
                         ))}
                       </div>
@@ -213,9 +237,17 @@ export default function FunisIndividuaisPage() {
 function CampanhaCard({
   f,
   tendenciaOrigem,
+  unidade,
+  periodo,
+  mediaAgendComp,
+  mediaCompPag,
 }: {
   f: FunilOrigem;
   tendenciaOrigem?: { serie: number[]; variacao: number | null };
+  unidade: string;
+  periodo: string;
+  mediaAgendComp: number | null;
+  mediaCompPag: number | null;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -257,18 +289,22 @@ function CampanhaCard({
           <FunilConversao f={f} />
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-2 text-center">
-            Onde perde leads
-          </div>
-          <FunilPerda f={f} />
+          <AnaliseIA
+            origem={f.origem}
+            unidade={unidade}
+            periodo={periodo}
+            agendados={f.agendados}
+            compareceram={f.compareceram}
+            pagaram={f.pagaram}
+            receita={f.receita}
+            taxaAgendComp={f.taxa_agendamento_para_comparecimento}
+            taxaCompPag={f.taxa_comparecimento_para_pagamento}
+            mediaAgendComp={mediaAgendComp}
+            mediaCompPag={mediaCompPag}
+            compacto
+          />
         </div>
       </div>
-      <MatrizConversoes
-        agendados={f.agendados}
-        compareceram={f.compareceram}
-        pagaram={f.pagaram}
-        compacto
-      />
     </div>
   );
 }
@@ -314,78 +350,6 @@ function FunilConversao({ f }: { f: FunilOrigem }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function FunilPerda({ f }: { f: FunilOrigem }) {
-  const transicoes = [
-    {
-      de: 'Agendados',
-      para: 'Compareceram',
-      perdidos: f.agendados - f.compareceram,
-      base: f.agendados,
-    },
-    {
-      de: 'Compareceram',
-      para: 'Pagaram',
-      perdidos: f.compareceram - f.pagaram,
-      base: f.compareceram,
-    },
-  ].map(t => ({
-    ...t,
-    pct: t.base > 0 ? t.perdidos / t.base : 0,
-    perdidos: Math.max(t.perdidos, 0), // Se inversao (mais comp que agend), trata como 0
-  }));
-
-  const maxPerda = Math.max(...transicoes.map(t => t.perdidos), 1);
-  const totalPerdido = transicoes.reduce((s, t) => s + t.perdidos, 0);
-  const maiorPerdaIdx = transicoes.findIndex(
-    t => t.perdidos === Math.max(...transicoes.map(x => x.perdidos))
-  );
-
-  return (
-    <div className="space-y-2">
-      {transicoes.map((t, i) => {
-        const lg = t.perdidos === 0 ? 0 : Math.max((t.perdidos / maxPerda) * 100, 8);
-        const isGargalo = i === maiorPerdaIdx && t.perdidos > 0;
-        return (
-          <div key={`${t.de}-${t.para}`} className="space-y-1">
-            <div className="flex items-baseline justify-between text-[10px]">
-              <span className={`${isGargalo ? 'text-red-300 font-semibold' : 'text-gray-400'}`}>
-                {t.de} → {t.para}
-                {isGargalo && <span className="ml-1 text-red-400">⚠ maior gargalo</span>}
-              </span>
-              <span className={`tabular-nums ${isGargalo ? 'text-red-300 font-semibold' : 'text-gray-500'}`}>
-                {t.perdidos > 0 ? `−${t.perdidos}` : '0'} ({(t.pct * 100).toFixed(0)}%)
-              </span>
-            </div>
-            <div className="bg-gray-800/60 rounded h-5 overflow-hidden relative">
-              <div
-                className="h-full rounded transition-all"
-                style={{
-                  width: `${lg}%`,
-                  background: isGargalo
-                    ? 'linear-gradient(135deg, #dc2626, #991b1b)'
-                    : 'linear-gradient(135deg, #ef4444aa, #b91c1caa)',
-                  minWidth: t.perdidos > 0 ? '24px' : '0',
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-      <div className="pt-2 mt-2 border-t border-gray-800 flex items-baseline justify-between text-[11px]">
-        <span className="text-gray-400">Total perdido no funil</span>
-        <span className="text-red-300 font-semibold tabular-nums">
-          −{totalPerdido} de {f.agendados}
-          {f.agendados > 0 && (
-            <span className="text-gray-500 font-normal ml-1">
-              ({((totalPerdido / f.agendados) * 100).toFixed(0)}%)
-            </span>
-          )}
-        </span>
-      </div>
     </div>
   );
 }

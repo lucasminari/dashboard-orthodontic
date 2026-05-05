@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { AtualizadoEm } from '../../components/AtualizadoEm';
-import { MatrizConversoes } from '../../components/MatrizConversoes';
+import { AnaliseIA } from '../../components/AnaliseIA';
 
 type ItemRanking = { nome: string; total: number; receita?: number };
 
@@ -200,19 +200,25 @@ export default function OrigemDetalhePage({ params }: { params: Promise<{ slug: 
               />
             </div>
 
-            {/* Funil invertido grande */}
+            {/* Funil + Análise IA lado a lado */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <FunilInvertido kpis={dados.kpis} taxas={dados.taxas} mediaGeral={dados.media_geral} />
-              <EvolucaoMensal evolucao={dados.evolucao} />
-            </div>
-
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <MatrizConversoes
+              <AnaliseIA
+                origem={origem}
+                unidade={UNIDADES.find(u => u.id === unidadeId)?.nome ?? ''}
+                periodo={PERIODOS.find(p => p.id === periodoId)?.nome ?? ''}
                 agendados={dados.kpis.agendados}
                 compareceram={dados.kpis.compareceram}
                 pagaram={dados.kpis.pagaram}
+                receita={dados.kpis.receita}
+                taxaAgendComp={dados.taxas.agend_comp}
+                taxaCompPag={dados.taxas.comp_pag}
+                mediaAgendComp={dados.media_geral.agend_comp}
+                mediaCompPag={dados.media_geral.comp_pag}
               />
             </div>
+
+            <EvolucaoMensal evolucao={dados.evolucao} />
 
             {/* Top rankings em grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
