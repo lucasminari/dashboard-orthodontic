@@ -6,6 +6,7 @@ import { AtualizadoEm } from '../components/AtualizadoEm';
 import { useFiltros, UNIDADES, PERIODOS } from '../components/useFiltros';
 import { Skeleton } from '../components/Skeleton';
 import { AnaliseIA } from '../components/AnaliseIA';
+import { KommoInfo } from '../components/KommoInfo';
 
 type FunilOrigem = {
   origem: string;
@@ -124,17 +125,20 @@ export default function FunisIndividuaisPage() {
   return (
     <main className="min-h-screen bg-black text-white p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">Campanhas</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            {unidadeAtual} · {periodoAtual} — funil de conversão e onde perde leads, por campanha.
-          </p>
-          <div className="mt-2">
-            <AtualizadoEm
-              tipos={['campanhas', 'performance']}
-              unidadeId={unidadeId || undefined}
-            />
+        <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Campanhas</h1>
+            <p className="text-gray-400 text-sm mt-1">
+              {unidadeAtual} · {periodoAtual} — funil de conversão e onde perde leads, por campanha.
+            </p>
+            <div className="mt-2">
+              <AtualizadoEm
+                tipos={['campanhas', 'performance']}
+                unidadeId={unidadeId || undefined}
+              />
+            </div>
           </div>
+          <BotaoSyncKommo />
         </header>
 
         {carregando && (
@@ -164,6 +168,9 @@ export default function FunisIndividuaisPage() {
                       tendenciaOrigem={tendencia?.origens[f.origem]}
                       unidade={unidadeAtual}
                       periodo={periodoAtual}
+                      unidadeId={unidadeId}
+                      dataInicio={intervalo.desde}
+                      dataFim={intervalo.ate}
                       mediaAgendComp={
                         dados && dados.total.agendados > 0
                           ? dados.total.compareceram / dados.total.agendados
@@ -209,6 +216,9 @@ export default function FunisIndividuaisPage() {
                             tendenciaOrigem={tendencia?.origens[f.origem]}
                             unidade={unidadeAtual}
                             periodo={periodoAtual}
+                            unidadeId={unidadeId}
+                            dataInicio={intervalo.desde}
+                            dataFim={intervalo.ate}
                             mediaAgendComp={
                               dados && dados.total.agendados > 0
                                 ? dados.total.compareceram / dados.total.agendados
@@ -241,6 +251,9 @@ function CampanhaCard({
   periodo,
   mediaAgendComp,
   mediaCompPag,
+  unidadeId,
+  dataInicio,
+  dataFim,
 }: {
   f: FunilOrigem;
   tendenciaOrigem?: { serie: number[]; variacao: number | null };
@@ -248,7 +261,11 @@ function CampanhaCard({
   periodo: string;
   mediaAgendComp: number | null;
   mediaCompPag: number | null;
+  unidadeId: number;
+  dataInicio?: string;
+  dataFim?: string;
 }) {
+  const ehKommo = f.fonte === 'kommo';
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
       <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
@@ -288,7 +305,7 @@ function CampanhaCard({
           </div>
           <FunilConversao f={f} />
         </div>
-        <div>
+        <div className="space-y-3">
           <AnaliseIA
             origem={f.origem}
             unidade={unidade}
@@ -303,6 +320,15 @@ function CampanhaCard({
             mediaCompPag={mediaCompPag}
             compacto
           />
+          {ehKommo && (
+            <KommoInfo
+              origem={f.origem}
+              unidadeId={unidadeId}
+              dataInicio={dataInicio}
+              dataFim={dataFim}
+              agendadosNoSistema={f.agendados}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -373,5 +399,56 @@ function Sparkline({ serie }: { serie: number[] }) {
     <svg width={w} height={h} className="shrink-0">
       <polyline fill="none" stroke={cor} strokeWidth="1.5" points={pontos} />
     </svg>
+  );
+}
+
+function BotaoSyncKommo() {
+  const [sincronizando, setSincronizando] = useState(false);
+  const [resultado, setResultado] = useState<string | null>(null);
+
+  const sincronizar = async () => {
+    setSincronizando(true);
+    setResultado(null);
+    try {
+      // Pega so leads atualizados nos ultimos 60 dias (mais rapido)
+      const desde = new Date();
+      desde.setDate(desde.getDate() - 60);
+      const desdeStr = desde.toISOString().slice(0, 10);
+      const r = await fetch(`/api/kommo-sync?desde=${desdeStr}`);
+      const j = await r.json();
+      if (j.ok) {
+        setResultado(`✓ ${j.total_gravado} leads sincronizados em ${j.duracao_segundos}s`);
+        // Reload depois de 2s pra atualizar os cards
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        setResultado(`✗ ${j.erro || 'erro desconhecido'}`);
+      }
+    } catch (e) {
+      setResultado(`✗ ${e instanceof Error ? e.message : 'erro'}`);
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {resultado && (
+        <span
+          className={`text-xs ${
+            resultado.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'
+          }`}
+        >
+          {resultado}
+        </span>
+      )}
+      <button
+        onClick={sincronizar}
+        disabled={sincronizando}
+        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-2 rounded transition flex items-center gap-2"
+        title="Atualiza leads das origens Kommo (Mídia Real, DBOUT, etc.)"
+      >
+        {sincronizando ? '🔄 Sincronizando...' : '🔄 Sync Kommo'}
+      </button>
+    </div>
   );
 }

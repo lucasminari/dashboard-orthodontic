@@ -51,6 +51,8 @@ function registrarAlias(canonica: OrigemCanonica, ...aliases: string[]) {
 }
 
 // Mídia Real ─ inclui agencia, variacoes de caixa e acento
+// Mídia Real - VP / Mídia Real - VH sao MESMA origem (so identifica a unidade
+// que paga a agencia — a unidade do paciente vem em outra etiqueta).
 registrarAlias(
   'Mídia Real',
   'Mídia Real',
@@ -63,6 +65,8 @@ registrarAlias(
   'Midi­a Real', // possivel byte zero-width
   'Mídia Real VP',
   'Mídia Real VH',
+  'Mídia Real - VP',
+  'Mídia Real - VH',
   'MIDIA REAL VP',
   'MIDIA REAL VH',
 );
@@ -72,6 +76,7 @@ registrarAlias(
   'DBOUT',
   'DBOUT',
   'Dbout',
+  'dbout',
   'Agência Dbout',
   'Agencia Dbout',
   'Agência Dbout - Central',
@@ -85,6 +90,7 @@ registrarAlias(
   'Pitch Yes',
   'PITCH YES',
   'PITCHYES',
+  'PITCH',
 );
 
 // Sorriso Novo
