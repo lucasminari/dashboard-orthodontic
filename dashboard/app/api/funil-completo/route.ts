@@ -6,6 +6,7 @@ import {
   ORIGENS_KOMMO_CANONICAS,
   ROTULO_SEM_ORIGEM,
 } from '@/lib/origem-mapeamento';
+import { expandirParaMesesInteiros } from '@/lib/periodo';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,10 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
+    // Expande pra meses inteiros — CampanhasReport eh snapshot mensal e
+    // Performance tambem usa o mesmo range (consistencia dos numeros).
+    const periodo = expandirParaMesesInteiros(dataInicio, dataFim);
+
     // ── raw_campanhas: TOTAIS oficiais por (campanha+acao+origem) ─────────
     // Cada upload eh um SNAPSHOT de UM MES de referencia (data_relatorio = 1o
     // dia do mes). Filtra uploads cujo mes esteja DENTRO do periodo solicitado.
@@ -50,8 +55,8 @@ export async function GET(request: NextRequest) {
         'origem, campanha, acao, total_leads, agendados, compareceram, contratos_fechados, contratos_pagos, data_relatorio, unidade_id, ingestao_id',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
-      if (dataInicio) qq = qq.gte('data_relatorio', dataInicio);
-      if (dataFim) qq = qq.lte('data_relatorio', dataFim);
+      if (periodo.inicio) qq = qq.gte('data_relatorio', periodo.inicio);
+      if (periodo.fim) qq = qq.lte('data_relatorio', periodo.fim);
       return qq;
     });
 
@@ -79,8 +84,8 @@ export async function GET(request: NextRequest) {
         'origem, telemarketing, pagou, valor, data, unidade_id',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
-      if (dataInicio) qq = qq.gte('data', dataInicio);
-      if (dataFim) qq = qq.lte('data', dataFim);
+      if (periodo.inicio) qq = qq.gte('data', periodo.inicio);
+      if (periodo.fim) qq = qq.lte('data', periodo.fim);
       return qq;
     });
 

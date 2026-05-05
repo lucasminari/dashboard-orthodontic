@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { expandirParaMesesInteiros } from '@/lib/periodo';
 
 export async function GET(request: Request) {
   try {
@@ -8,13 +9,16 @@ export async function GET(request: Request) {
     const desde = searchParams.get('desde');
     const ate = searchParams.get('ate');
 
+    // Expande pra meses inteiros (consistencia com snapshot mensal)
+    const periodo = expandirParaMesesInteiros(desde, ate);
+
     // Pega snapshot mais recente de raw_campanhas (totais oficiais)
     let qCamp = supabase
       .from('raw_campanhas')
       .select('agendados, compareceram, contratos_pagos, ingestao_id, unidade_id, data_relatorio');
     if (unidade) qCamp = qCamp.eq('unidade_id', unidade);
-    if (desde) qCamp = qCamp.gte('data_relatorio', desde);
-    if (ate) qCamp = qCamp.lte('data_relatorio', ate);
+    if (periodo.inicio) qCamp = qCamp.gte('data_relatorio', periodo.inicio);
+    if (periodo.fim) qCamp = qCamp.lte('data_relatorio', periodo.fim);
     const { data: camp, error: errC } = await qCamp;
     if (errC) throw new Error(errC.message);
 
@@ -39,11 +43,11 @@ export async function GET(request: Request) {
       pagaram += Number(r.contratos_pagos) || 0;
     }
 
-    // Receita vem do Performance (filtrado por data)
+    // Receita vem do Performance (mesmo periodo expandido pra consistencia)
     let qPerf = supabase.from('raw_performance').select('valor').eq('pagou', true);
     if (unidade) qPerf = qPerf.eq('unidade_id', unidade);
-    if (desde) qPerf = qPerf.gte('data', desde);
-    if (ate) qPerf = qPerf.lte('data', ate);
+    if (periodo.inicio) qPerf = qPerf.gte('data', periodo.inicio);
+    if (periodo.fim) qPerf = qPerf.lte('data', periodo.fim);
     const { data: perf, error: errP } = await qPerf;
     if (errP) throw new Error(errP.message);
 

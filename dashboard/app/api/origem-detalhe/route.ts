@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { buscarTudo } from '@/lib/supabase-paginar';
 import { mapearOrigem, ROTULO_SEM_ORIGEM } from '@/lib/origem-mapeamento';
+import { expandirParaMesesInteiros } from '@/lib/periodo';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,14 +60,17 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('data_inicio');
     const dataFim = searchParams.get('data_fim');
 
+    // Expande pra meses inteiros (consistencia com snapshot mensal)
+    const periodo = expandirParaMesesInteiros(dataInicio, dataFim);
+
     // ── raw_campanhas: TOTAIS oficiais por origem (snapshot mais recente) ──
     const campanhasRows = await buscarTudo('raw_campanhas', q => {
       let qq = q.select(
         'origem, campanha, acao, agendados, compareceram, contratos_pagos, data_relatorio, unidade_id, ingestao_id',
       );
       if (unidadeId) qq = qq.eq('unidade_id', unidadeId);
-      if (dataInicio) qq = qq.gte('data_relatorio', dataInicio);
-      if (dataFim) qq = qq.lte('data_relatorio', dataFim);
+      if (periodo.inicio) qq = qq.gte('data_relatorio', periodo.inicio);
+      if (periodo.fim) qq = qq.lte('data_relatorio', periodo.fim);
       return qq;
     });
 
@@ -97,11 +101,11 @@ export async function GET(request: NextRequest) {
     const noPeriodo = (data: string | null | undefined): boolean => {
       if (!data) return false;
       const d = data.slice(0, 10);
-      if (dataInicio && d < dataInicio) return false;
-      if (dataFim && d > dataFim) return false;
+      if (periodo.inicio && d < periodo.inicio) return false;
+      if (periodo.fim && d > periodo.fim) return false;
       return true;
     };
-    const semFiltro = !dataInicio && !dataFim;
+    const semFiltro = !periodo.inicio && !periodo.fim;
 
     // ── KPIs: totais vem do CampanhasReport, receita do Performance ──────
     let agendados = 0;
