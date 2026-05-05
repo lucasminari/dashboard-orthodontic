@@ -7,6 +7,7 @@ import { useFiltros, UNIDADES, PERIODOS } from '../components/useFiltros';
 import { Skeleton } from '../components/Skeleton';
 import { AnaliseIA } from '../components/AnaliseIA';
 import { KommoInfo } from '../components/KommoInfo';
+import { GraficoLeadsPorDia } from '../components/GraficoLeadsPorDia';
 
 type FunilOrigem = {
   origem: string;
@@ -331,6 +332,12 @@ function CampanhaCard({
           )}
         </div>
       </div>
+      <GraficoLeadsPorDia
+        origem={f.origem}
+        unidadeId={unidadeId}
+        dataInicio={dataInicio}
+        dataFim={dataFim}
+      />
     </div>
   );
 }
