@@ -1,4 +1,11 @@
 import 'reflect-metadata';
+
+// Permite que BigInt seja serializado para JSON nas respostas HTTP.
+// Sem isto, JSON.stringify lanca "Do not know how to serialize a BigInt".
+(BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
+  return this.toString();
+};
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
