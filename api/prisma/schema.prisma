@@ -1,0 +1,123 @@
+// Schema do Prisma para o sistema de acompanhamento OrthoDontic.
+//
+// Apenas as tabelas tracking_* sao gerenciadas por este schema.
+// As tabelas legadas (kommo_leads, pacientes, raw_*) sao gerenciadas pelo
+// dashboard/ Next.js e acessadas aqui via $queryRaw quando necessario.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Usuarios do sistema (admins + gerentes de unidade).
+model TrackingUser {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  senhaHash  String   @map("senha_hash")
+  nome       String
+  role       String // "admin" | "gerente"
+  unidadeId  Int?     @map("unidade_id") // null para admin
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  pushSubscriptions   TrackingPushSubscription[]
+  attentionVistos     TrackingAttentionItem[]    @relation("VistoPor")
+  attentionResolvidos TrackingAttentionItem[]    @relation("ResolvidoPor")
+  attentionEvents     TrackingAttentionEvent[]
+
+  @@map("tracking_users")
+}
+
+/// Subscricao Web Push de cada navegador do gerente.
+model TrackingPushSubscription {
+  id         BigInt   @id @default(autoincrement())
+  usuarioId  Int      @map("usuario_id")
+  endpoint   String
+  p256dh     String
+  auth       String
+  userAgent  String?  @map("user_agent")
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  usuario TrackingUser @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, endpoint])
+  @@map("tracking_push_subscriptions")
+}
+
+/// Historico de transicao de etapa (auditoria + base p/ metricas).
+model TrackingStageTransition {
+  id           BigInt   @id @default(autoincrement())
+  kommoLeadId  BigInt   @map("kommo_lead_id")
+  unidadeId    Int?     @map("unidade_id")
+  deStatus     String?  @map("de_status")
+  paraStatus   String   @map("para_status")
+  ocorreuEm    DateTime @map("ocorreu_em")
+  fonte        String // "webhook" | "polling"
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  @@unique([kommoLeadId, ocorreuEm, paraStatus], name: "kommo_lead_id_ocorreu_em_para_status")
+  @@index([kommoLeadId, ocorreuEm(sort: Desc)])
+  @@index([unidadeId, ocorreuEm(sort: Desc)])
+  @@map("tracking_stage_transitions")
+}
+
+/// Snapshot da fila de atencao: 1 linha por lead com pendencia ativa.
+model TrackingAttentionItem {
+  id                BigInt    @id @default(autoincrement())
+  kommoLeadId       BigInt    @unique @map("kommo_lead_id")
+  unidadeId         Int       @map("unidade_id")
+  motivo            String // "timeout_olivia" | "frustracao" | "pediu_humano" | "repeticao"
+  motivoDetalhe     Json?     @map("motivo_detalhe")
+  prioridade        Int // 1=urgente .. 3=baixa
+  status            String    @default("aberto") // "aberto" | "visto" | "resolvido" | "descartado"
+  detectadoEm       DateTime  @map("detectado_em")
+  vistoEm           DateTime? @map("visto_em")
+  vistoPorId        Int?      @map("visto_por")
+  resolvidoEm       DateTime? @map("resolvido_em")
+  resolvidoPorId    Int?      @map("resolvido_por")
+  ultimaAtualizacao DateTime  @updatedAt @map("ultima_atualizacao")
+
+  vistoPor     TrackingUser?            @relation("VistoPor", fields: [vistoPorId], references: [id])
+  resolvidoPor TrackingUser?            @relation("ResolvidoPor", fields: [resolvidoPorId], references: [id])
+  eventos      TrackingAttentionEvent[]
+
+  @@index([unidadeId, status, prioridade, detectadoEm])
+  @@index([status, prioridade])
+  @@map("tracking_attention_items")
+}
+
+/// Auditoria de mudancas de estado da fila de atencao.
+model TrackingAttentionEvent {
+  id              BigInt   @id @default(autoincrement())
+  attentionItemId BigInt   @map("attention_item_id")
+  evento          String // "criado" | "visto" | "resolvido" | "reaberto" | "descartado"
+  porUsuarioId    Int?     @map("por_usuario_id")
+  ocorreuEm       DateTime @default(now()) @map("ocorreu_em")
+  metadata        Json?
+
+  item    TrackingAttentionItem @relation(fields: [attentionItemId], references: [id], onDelete: Cascade)
+  usuario TrackingUser?         @relation(fields: [porUsuarioId], references: [id])
+
+  @@index([attentionItemId, ocorreuEm])
+  @@map("tracking_attention_events")
+}
+
+/// Log de execucoes de sync (polling + webhook). Diagnostico operacional.
+model TrackingSyncRun {
+  id                Int       @id @default(autoincrement())
+  tipo              String // "webhook" | "polling_leads" | "polling_messages"
+  iniciadoEm        DateTime  @map("iniciado_em")
+  terminadoEm       DateTime? @map("terminado_em")
+  leadsProcessados  Int?      @map("leads_processados")
+  novos             Int?
+  atualizados       Int?
+  erros             Json?
+  status            String? // "ok" | "falhou" | "parcial"
+
+  @@index([tipo, iniciadoEm(sort: Desc)])
+  @@map("tracking_sync_runs")
+}
