@@ -10,6 +10,7 @@ import { Tooltip } from './components/Tooltip';
 import { ExportarCSV } from './components/ExportarCSV';
 import { BarraMeta } from './components/BarraMeta';
 import { MatrizConversoes } from './components/MatrizConversoes';
+import { AtencaoCard } from './components/AtencaoCard';
 
 type TotalFunil = {
   agendados: number;
@@ -113,6 +114,10 @@ export default function Home() {
       </div>
 
       {erro && <div className="mb-6 p-4 bg-red-900/30 border border-red-800 rounded text-red-300 text-sm">Erro: {erro}</div>}
+
+      <div className="mb-6">
+        <AtencaoCard />
+      </div>
 
       {!total || !funilOrigens ? (
         <SkeletonPainel />

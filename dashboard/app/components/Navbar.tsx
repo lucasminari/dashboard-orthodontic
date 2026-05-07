@@ -45,6 +45,7 @@ export default function Navbar() {
           <Link href="/import" className={linkClass('/import')}>Relatórios</Link>
           <Link href="/metas" className={linkClass('/metas')}>Metas</Link>
           <Link href="/buscar" className={linkClass('/buscar')}>🔍 Buscar</Link>
+          <Link href="/atencao" className={linkClass('/atencao')}>Atenção</Link>
         </div>
         {mostraFiltros && (
           <div className="md:ml-auto flex items-center gap-2 md:gap-3 flex-wrap">
