@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { IngestionModule } from './ingestion/ingestion.module';
 import { AttentionModule } from './attention/attention.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AttentionModule } from './attention/attention.module';
     PrismaModule,
     UsersModule,
     AuthModule,
+    NotificationsModule,
     IngestionModule,
     AttentionModule,
   ],

@@ -1,15 +1,19 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarAttentionItemInput, ListarFilaQuery } from './dto/atencao.dto';
 import type { AuthenticatedUser } from '../auth/jwt.strategy';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AttentionService {
+  private readonly log = new Logger(AttentionService.name);
+
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private notifications: NotificationsService,
   ) {}
 
   /**
@@ -37,6 +41,7 @@ export class AttentionService {
           de: { motivo: existente.motivo, prioridade: existente.prioridade },
           para: { motivo: input.motivo, prioridade: input.prioridade },
         });
+        await this.notificarUnidade(input.unidadeId, atualizado.id, input.motivo, input.prioridade);
         return atualizado;
       }
       return existente;
@@ -59,6 +64,7 @@ export class AttentionService {
         },
       });
       await this.registrarEvento(existente.id, 'reaberto', null, { motivo: input.motivo });
+      await this.notificarUnidade(input.unidadeId, reaberto.id, input.motivo, input.prioridade);
       return reaberto;
     }
 
@@ -74,7 +80,43 @@ export class AttentionService {
       },
     });
     await this.registrarEvento(novo.id, 'criado', null, { motivo: input.motivo });
+    await this.notificarUnidade(input.unidadeId, novo.id, input.motivo, input.prioridade);
     return novo;
+  }
+
+  private async notificarUnidade(
+    unidadeId: number,
+    itemId: bigint,
+    motivo: string,
+    prioridade: number,
+  ) {
+    try {
+      const titulo = prioridade === 1 ? '[URGENTE] Conversa precisa de humano' : 'Nova atencao na fila';
+      const corpo = this.descricaoMotivo(motivo);
+      await this.notifications.enviarParaUnidade(unidadeId, {
+        titulo,
+        corpo,
+        url: `/atencao/${itemId.toString()}`,
+        tag: `attention-${itemId.toString()}`,
+      });
+    } catch (e) {
+      this.log.warn(`Falha ao notificar unidade ${unidadeId}: ${(e as Error).message}`);
+    }
+  }
+
+  private descricaoMotivo(motivo: string): string {
+    switch (motivo) {
+      case 'pediu_humano':
+        return 'Lead pediu pra falar com atendente';
+      case 'frustracao':
+        return 'Sinais de frustracao detectados';
+      case 'timeout_olivia':
+        return 'Olivia parou de responder';
+      case 'repeticao':
+        return 'Lead repetindo perguntas sem resposta';
+      default:
+        return motivo;
+    }
   }
 
   async listarFila(user: AuthenticatedUser, query: ListarFilaQuery) {

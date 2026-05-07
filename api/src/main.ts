@@ -13,7 +13,10 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: false });
+  const app = await NestFactory.create(AppModule, {
+    cors: false,
+    rawBody: true,
+  });
 
   const config = app.get(ConfigService);
   const corsOrigin = config.get<string>('CORS_ORIGIN');
